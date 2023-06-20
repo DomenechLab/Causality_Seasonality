@@ -8,13 +8,15 @@
 
 # Load packages -----------------------------------------------------------
 rm(list = ls())
-source("s-base_packages.R")
 source("f-Pred_RH.R")
 Pred_RH <- Vectorize(FUN = Pred_RH)
 source("f-CreateMod.R")
 source("f-CreateClimData.R")
+
+source("s-base_packages.R")
 library(mgcv)
 library(pomp)
+library(ggrepel)
 theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
 
 # Set model parameters ----------------------------------------------------
@@ -29,12 +31,14 @@ parms <- c("mu" = 1 / 80 / 52, # Birth rate
            "rho_k" = 0.04) # Reporting over-dispersion
 
 # Load climatic data in a given location------------------------------------------------------
-# Bogota: weather station "SKBO"
-# Madrid: weather station "LEVS"
+# Bogota (Colombia): weather station "SKBO", rho(Te, RH) = -0.08, CV(RH) = 0.07
+# Barranquilla (Colombia): SKBQ, rho(Te, RH) = -0.09, CV(RH) = 0.06
+# Gijon (Spain): LEAS, rho(Te, RH) = 0.29, CV(RH) = 0.08
+# Rostock (Germany): Rostock, rho(Te, RH) = -0.69, CV(RH) = 0.085
 
 e_Te <- parms["e_Te"]
 e_RH <- parms["e_RH"]
-loc_nm <- "SKBO"
+loc_nm <- "Rostock"
 
 clim_dat <- CreateClimData(loc_nm = loc_nm, n_years = 10)
 
