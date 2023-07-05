@@ -5,7 +5,6 @@
 # Illustrate by running SIS and SIR models with climatic data in Madrid (weather station "LEVS") 
 #######################################################################################################
 
-
 # Load packages -----------------------------------------------------------
 rm(list = ls())
 source("f-Pred_RH.R")
@@ -14,10 +13,10 @@ source("f-CreateMod.R")
 source("f-CreateClimData.R")
 
 source("s-base_packages.R")
-library(mgcv)
-library(pomp)
-library(ggrepel)
+library("mgcv")
+library("pomp")
 theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
+save_plot <- T # Should all the plots be saved as a pdf? 
 
 # Set model parameters ----------------------------------------------------
 parms <- c("mu" = 1 / 80 / 52, # Birth rate 
@@ -39,6 +38,7 @@ parms <- c("mu" = 1 / 80 / 52, # Birth rate
 e_Te <- parms["e_Te"]
 e_RH <- parms["e_RH"]
 loc_nm <- "Rostock"
+if(save_plot) pdf(file = sprintf("_saved/m-vignette-descendant-bias-%s.pdf", loc_nm), width = 8, height = 8)
 
 clim_dat <- CreateClimData(loc_nm = loc_nm, n_years = 10)
 
@@ -171,7 +171,7 @@ f_reg <- function(df, n = 5L) {
     
     df_cur <- df %>% select("week_no", Te_norm_lag, RH_pred_norm_lag, paste0(c("CC_obs_", "CC_obs_lag_"), i))
     colnames(df_cur) <- c("week_no", "Te", "RH", "CC_obs", "CC_obs_lag")
-    M_nb[[i]] <- gam(formula = CC_obs ~ 1 + log(CC_obs_lag + 1) + Te + RH + s(week_no, k = 10), 
+    M_nb[[i]] <- gam(formula = CC_obs ~ 1 + Te + RH + s(week_no, k = 50), 
                      family = nb(link = "log"), 
                      data = df_cur)
   }
@@ -214,7 +214,7 @@ for(s in svars_plot) {
     geom_boxplot() + 
     #facet_grid(R0 ~ factor(1 / alpha / 52), scales = "fixed") + 
     facet_wrap(~ R0_fac, scales = "fixed", ncol = 2) + 
-    labs(x = "Waning rate (per year)", y = "Point estimate", title = s)
+    labs(x = "Waning rate (per week)", y = "Point estimate", title = s)
   
   if(s %in% c("e_Te", "e_RH")) {
     pl <- pl + 
@@ -231,10 +231,12 @@ for(s in svars_plot) {
                mapping = aes(x = factor(round(alpha, 2)), y = value)) + 
     geom_boxplot() + 
     facet_wrap(~ R0_fac, scales = "fixed", ncol = 2) + 
-    labs(x = "Waning rate (per year)", y = "Estimate SE", title = s)
+    labs(x = "Waning rate (per week)", y = "Estimate SE", title = s)
   
   print(pl)
 }
+
+if(save_plot) dev.off()
 
 #######################################################################################################
 # END

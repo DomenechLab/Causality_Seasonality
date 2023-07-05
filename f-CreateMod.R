@@ -90,7 +90,9 @@ static double pred_RH(double Te, double Td) {
                          "lin_bool" = as.integer(lin_bool_val)), 
               paramnames = c("mu", "N", "R0", "e_Te", "Te_mean", 
                              "e_RH", "RH_mean", "eps", "alpha", "rho_mean",
-                             "rho_k", "lin_bool")
+                             "rho_k", "lin_bool"), 
+              partrans = parameter_trans(log = c("R0", "alpha", "rho_k"), 
+                                         logit = c("rho_mean"))
   )
   
   return(mod)

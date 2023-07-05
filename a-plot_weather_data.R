@@ -9,6 +9,8 @@ source("s-base_packages.R")
 source("f-Pred_RH.R")
 Pred_RH <- Vectorize(FUN = Pred_RH)
 library(ISOweek)
+library(ggrepel)
+library(readxl)
 theme_set(theme_bw())
 par(bty = "l", las = 2)
 
