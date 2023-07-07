@@ -49,9 +49,14 @@ static double pred_RH(double Te, double Td) {
   DCC = p_SI * S; 
 ")
   
-  # Csnippet for observation model
-  obs_model <- Csnippet("
+  # Csnippet for generating observations
+  robs_model <- Csnippet("
   CC_obs = rnbinom_mu(1.0 / rho_k, rho_mean * CC);
+")
+  
+  # Csnippet for evaluating likelihood of observations
+  dobs_model <- Csnippet("
+  lik = dnbinom_mu(nearbyint(CC_obs), 1.0 / rho_k, rho_mean * CC, give_log);
 ")
   
   # Csnippet for initializing state variables
@@ -73,7 +78,8 @@ static double pred_RH(double Te, double Td) {
                                       times = "week_no", order = "constant"), 
               statenames = c("S", "I", "R", "CC"), 
               skeleton = pomp::map(f = det_process_model, delta.t = 1),  
-              rmeasure = obs_model, 
+              rmeasure = robs_model, 
+              dmeasure = dobs_model,
               rinit = init_mod,
               globals = RH_Cfun,
               params = c("mu" = 1 / 80 / 52, 
