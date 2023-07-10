@@ -15,14 +15,16 @@ source("f-Pred_RH.R")
 Pred_RH <- Vectorize(FUN = Pred_RH)
 source("f-CreateMod.R")
 source("f-CreateClimData.R")
+source("f-GenStochSim.R")
 
 source("s-base_packages.R")
+library("bbmle")
 library("pomp")
-library("subplex")
 library("corrplot")
+
 theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
 par(bty = "l", las = 1, lwd = 2)
-save_plot <- F # Should all the plots be saved as a pdf? 
+save_plot <- T # Should all the plots be saved as a pdf? 
 
 # Set model parameters ----------------------------------------------------
 parms <- c("mu" = 1 / 80 / 52, # Birth rate 
@@ -31,7 +33,7 @@ parms <- c("mu" = 1 / 80 / 52, # Birth rate
            "e_Te" = -0.2, # Effect of Te on transmission 
            "e_RH" = -0.2, # Effect of RH on transmission
            "eps" = 1, # Fraction of infections conferring sterilizing immunity (1: SIR, 0: SIS)
-           "alpha" = 1 / (2 * 52), # Rate of waning immunity
+           "alpha" = 1 / (1 * 52), # Rate of waning immunity
            "rho_mean" = 0.1, # Average reporting probability 
            "rho_k" = 0.04) # Reporting over-dispersion
 
@@ -41,7 +43,7 @@ parms <- c("mu" = 1 / 80 / 52, # Birth rate
 
 e_Te <- parms["e_Te"]
 e_RH <- parms["e_RH"]
-loc_nm <- "Rostock"
+loc_nm <- "SKBO"
 if(save_plot) pdf(file = sprintf("_saved/vignette-quasi-experiments-%s.pdf", loc_nm), width = 8, height = 8)
 
 clim_dat <- CreateClimData(loc_nm = loc_nm, n_years = 10)
@@ -59,7 +61,8 @@ pl <- ggplot(data = clim_dat_long %>% filter(var %in% c("Te", "Td", "RH", "RH_pr
              mapping = aes(x = week_date, y = value)) + 
   geom_line() + 
   facet_wrap(~ var, scales = "free_y", ncol = 2) + 
-  labs(x = "Time (weeks)", y = "Value", title = "Climatic data, time plot")
+  labs(x = "Time (weeks)", y = "Value", 
+       title = sprintf("Climatic data, time plot (location: %s)", loc_nm))
 print(pl)
 
 # Plot measured and predicted RH
@@ -144,25 +147,55 @@ pl <- ggplot(data = sim_long,
   geom_line() + 
   #scale_y_sqrt() +
   facet_wrap(~ state_var, scales = "free_y", ncol = 2, dir = "v") + 
-  labs(x = "Year", y = "Proportion", title = "All model variables, time plot")
+  labs(x = "Year", y = "Proportion", 
+       title = "All model variables, time plot (deterministic model)", 
+       subtitle = sprintf("R0=%.2f, 1/alpha=%.1f yr, rho_mean=%.1f, rho_k=%.2f, N=%.1f M, eps=%.1f, e_Te=%.1f, e_RH=%.1f", 
+                          parms["R0"], 1 / parms["alpha"] / 52, parms["rho_mean"], parms["rho_k"], parms["N"] / 1e6, parms["eps"], 
+                          parms["e_Te"], parms["e_RH"]))
 print(pl)
+
+# Generate observations, assuming only observation noise ---------------------------------------------------
+n_rep <- 100 # No of replicate datasets
+
+# Generate replicate datasets 
+CC_obs_noiseObs <- freeze(seed = 2186L, 
+                          expr = replicate(n = n_rep, 
+                                           expr = rnbinom(n = length(sim$CC), 
+                                                          mu = rho_mean_val * sim$CC, 
+                                                          size = 1 / rho_k_val)))
+
+# Plot 
+matplot(sim$week, CC_obs_noiseObs, type = "l", lty = 1, 
+        xlab = "Week", ylab = "No of cases", 
+        main = sprintf("%d generated datasets, with observation noise only", n_rep), 
+        col = "grey")
+lines(sim$week, sim$CC * parms["rho_mean"], col = "red", lwd = 2)
+
+# Generate observation, assuming observation AND process noise ----------------------------------------------------
+sim_noiseAll <- freeze(seed = 2186L, 
+                       expr = replicate(n = n_rep, 
+                                        expr = GenStochsim(pomp_mod = PompMod, beta_sigma = 0.02),
+                                        simplify = F)) 
+sim_noiseAll <- sim_noiseAll %>% 
+  bind_rows(.id = "sim")
+
+CC_obs_noiseAll <- sim_noiseAll %>% 
+  select(sim, week, CC_obs) %>% 
+  pivot_wider(names_from = "sim", values_from = "CC_obs") %>% 
+  arrange(week) %>% 
+  select(-week) %>% 
+  as.data.frame()
+
+matplot(sim$week, CC_obs_noiseAll, type = "l", lty = 1, 
+        xlab = "Week", ylab = "No of cases", 
+        main = sprintf("%d generated datasets, with observation and process noise", n_rep), 
+        col = "grey")
+lines(sim$week, sim$CC * parms["rho_mean"], col = "red", lwd = 2)
+#lines(sim$week, sim$CC, col = "red", lwd = 2)
 
 # Run estimation for climatic parameters -------------------------------------------------------------
 
-n_rep <- 10 # No of replicate datasets
-
-# Generate replicate datasets 
-CC_obs_list <- freeze(seed = 2186L, 
-                      expr = replicate(n = n_rep, 
-                                       expr = rnbinom(n = length(sim$CC), 
-                                                      mu = rho_mean_val * sim$CC, 
-                                                      size = 1 / rho_k_val)))
 fits <- vector(mode = "list", length = n_rep)
-
-# Plot 
-matplot(sim$week, CC_obs_list, type = "l", lty = 1, 
-        xlab = "Week", ylab = "No of cases", 
-        main = sprintf("%d generated datasets", n_rep))
 
 # Parameters to estimate
 all_pars_nm <- c("R0", "alpha", "rho_mean", "rho_k", "e_Te", "e_RH")
@@ -174,17 +207,19 @@ fits <- bake(file = sprintf("_saved/vignette-quasi-experiments-%s.rds", loc_nm),
                  print(s)
                  
                  # Assign data to pomp object
-                 PompMod@data[1, ] <- CC_obs_list[, s]
+                 PompMod@data[1, ] <- as.numeric(CC_obs_noiseAll[, s])
                  
                  # Create objective function
                  LL_fun_cur <- traj_objfun(data = PompMod, est = all_pars_nm)
+                 parnames(LL_fun_cur) <- all_pars_nm
                  
                  # Run optimization
                  fits[[s]] <- try(
-                   subplex(fn = LL_fun_cur, 
-                           par = unname(base_pars_trans[all_pars_nm]), 
-                           control = list(maxit = 1e6), 
-                           hessian = T)
+                   mle2(minuslogl = LL_fun_cur, 
+                        start = base_pars_trans[all_pars_nm], 
+                        optimizer = "optim", 
+                        method = "Nelder-Mead", 
+                        control = list(maxit = 1e6))
                  )
                }
                fits
@@ -200,73 +235,66 @@ if(any(fits_class == "try-error")) fits <- fits[-which(fits_class == "try-error"
 
 # Extracts information on model fit
 fits_info <- data.frame(sim_no = seq_along(fits), 
-                        ll = -map_dbl(.x = fits, .f = "value"), 
-                        conv = map_int(.x = fits, .f = "convergence"))
+                        counts = map_dbl(.x = fits, .f = ~ .x@details$counts[1]),
+                        ll = -map_dbl(.x = fits, .f = ~ .x@details$value), 
+                        conv = map_int(.x = fits, .f = ~ .x@details$convergence))
 
 # Remove fits that didn't converge, if any
 if(any(fits_info$conv < 0)) {
   fits <- fits[-which(fits_info$conv < 0)]
 }
 
-# Extract parameter estimates
-pars_mle <- sapply(fits, getElement, "par")
-rownames(pars_mle) <- all_pars_nm
-pars_mle <- pars_mle %>% 
-  t() %>% 
-  as.data.frame() %>% 
-  mutate(sim_no = 1:nrow(.)) %>% 
-  select(sim_no, everything()) %>% 
-  pivot_longer(cols = -sim_no, names_to = "par", values_to = "mle")
+# Extract MLE and SE of estimates
+pars_mle_se <- purrr::map(.x = fits, 
+                          .f = ~ .x %>% summary() %>% coef() %>% as.data.frame() %>% rownames_to_column())
 
-# Extract parameter SEs
-pars_SE <- map_df(.x = fits, .f = function(x) {
-  I <- solve(x$hessian)
-  out <- sqrt(diag(I))
-  names(out) <- all_pars_nm
-  return(out)
-})
+pars_mle_se <- pars_mle_se %>% 
+  bind_rows(.id = "sim_no") %>% 
+  rename("par" = "rowname", 
+         "mle" = "Estimate", 
+         "se" = "Std. Error") %>% 
+  select(sim_no, par, mle, se) %>% 
+  left_join(y = base_pars_df %>% rename("true" = "value")) %>% 
+  mutate(sim_no = as.integer(sim_no)) %>% 
+  left_join(y = fits_info)
 
-pars_SE <- pars_SE %>% 
-  mutate(sim_no = 1:nrow(.)) %>% 
-  select(sim_no, everything()) %>% 
-  pivot_longer(cols = -sim_no, names_to = "par", values_to = "se")
-
-pars_all <- pars_mle %>% 
-  left_join(y = pars_SE) %>% 
-  left_join(y = base_pars_df %>% rename("true" = "value"))
+# Replace NaN SE with NAs
+if(any(is.nan(pars_mle_se$se))) {
+  pars_mle_se$se[is.nan(pars_mle_se$se)] <- NA
+}
 
 # Calculate mean absolute bias 
-est_perf <- pars_all %>% 
+est_perf <- pars_mle_se %>% 
   group_by(par) %>% 
   summarise(mean_bias = mean(abs(mle - true)), 
-            mean_se = mean(se)) %>% 
+            mean_se = mean(se, na.rm = T)) %>% 
   ungroup() %>% 
   pivot_longer(cols = -par)
 
+# Plots -------------------------------------------------------------------
 # Plot correlation matrix
-R_mat <- fits[[1]]$hessian %>% 
-  solve() %>% 
-  cov2cor()
-rownames(R_mat) <- colnames(R_mat) <- all_pars_nm
-
-corrplot(corr = R_mat, method = "number", type = "lower")
+# R_mat <- fits[[1]]@vcov %>% cov2cor()
+# 
+# corrplot(corr = R_mat, method = "number", type = "lower")
 
 # Plot confidence intervals for all parameters
-pl <- ggplot(data = pars_all, 
-             mapping = aes(x = mle, y = sim_no, xmin = mle - 2 * se, xmax = mle + 2 * se)) + 
+pl <- ggplot(data = pars_mle_se, 
+             mapping = aes(x = mle, y = sim_no, xmin = mle - 2 * se, xmax = mle + 2 * se, color = ll)) + 
   geom_pointrange() + 
   geom_vline(data = base_pars_df, mapping = aes(xintercept = value), linetype = "dashed", color = "red") + 
   facet_wrap(~ par, scales = "free_x") + 
+  scale_color_viridis(option = "viridis") + 
   labs(x = "Estimate", y = "Simulation no", title = "Estimates, all parameters")
 print(pl)
 
 # Same plot for climatic parameters only
-pl <- ggplot(data = pars_all %>% filter(par %in% c("e_Te", "e_RH")), 
-             mapping = aes(x = mle, y = sim_no, xmin = mle - 2 * se, xmax = mle + 2 * se)) + 
+pl <- ggplot(data = pars_mle_se %>% filter(par %in% c("e_Te", "e_RH")), 
+             mapping = aes(x = mle, y = sim_no, xmin = mle - 2 * se, xmax = mle + 2 * se, color = ll)) + 
   geom_pointrange() + 
   geom_vline(data = base_pars_df %>% filter(par %in% c("e_Te", "e_RH")), 
              mapping = aes(xintercept = value), linetype = "dashed", color = "red") + 
   facet_wrap(~ par, scales = "fixed", ncol = 1) + 
+  scale_color_viridis(option = "viridis") + 
   labs(x = "Estimate", y = "Simulation no", title = "Estimates, climatic parameters")
 print(pl)
 
@@ -277,6 +305,43 @@ pl <- ggplot(data = est_perf, mapping = aes(x = par, y = value)) +
   facet_wrap(~ name, scales = "free_y", ncol = 1) + 
   labs(x = "Parameter", y = "Value", title = "Estimation performance")
 print(pl)
+
+# Profile likelihood for one fit ------------------------------------------
+# # Select run with highest likelihood
+# fit_no <- pars_mle_se$sim_no[which.max(pars_mle_se$ll)]
+# fit_cur <- fits[[fit_no]]
+# 
+# # Extract profiles
+# # NB: z represents the square-root of the deviance 
+# prof2 <- try(profile(fitted = fit_cur, which = c("e_Te", "e_RH")))
+# prof_Te <- prof2@profile$e_Te 
+# prof_Te <- data.frame(z = prof_Te$z, prof_Te$par.vals)
+# prof_RH <- prof2@profile$e_RH
+# prof_RH <- data.frame(z = prof_RH$z, prof_RH$par.vals)
+# 
+# # Plot
+# q_95p <- qchisq(p = 0.95, df = 1)
+# CIs <- confint(prof2)
+# 
+# pl_Te <- ggplot(data = prof_Te, 
+#                 mapping = aes(x = e_Te, y = e_RH, color = abs(z))) + 
+#   #geom_point() +
+#   geom_vline(xintercept = CIs["e_Te", ], linetype = "dashed", color = "grey") + 
+#   geom_line() + 
+#   scale_color_viridis(option = "viridis", direction = -1) +
+#   theme_classic() + 
+#   labs(x = "e_Te", y = "e_RH", title = "Profile for e_Te")
+# print(pl_Te)
+# 
+# pl_RH <- ggplot(data = prof_RH, 
+#                 mapping = aes(x = e_RH, y = e_Te, color = abs(z))) + 
+#   #geom_point() +
+#   geom_vline(xintercept = CIs["e_RH", ], linetype = "dashed", color = "grey") + 
+#   geom_line() + 
+#   scale_color_viridis(option = "viridis", direction = -1) +
+#   theme_classic() + 
+#   labs(x = "e_RH", y = "e_Te", title = "Profile for e_RH")
+# print(pl_RH)
 
 # End  statements ---------------------------------------------------------------------
 if(save_plot) dev.off()

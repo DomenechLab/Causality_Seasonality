@@ -9,6 +9,8 @@ source("f-Pred_RH.R")
 source("f-CreateClimData.R")
 Pred_RH <- Vectorize(FUN = Pred_RH)
 source("f-CreateMod.R")
+source("f-Pred_RH.R")
+source("f-GenStochSim.R")
 library(pomp)
 theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
 
@@ -19,7 +21,7 @@ parms <- c("mu" = 1 / 80 / 52, # Birth rate
            "e_Te" = -0.2, # Effect of Te on transmission 
            "e_RH" = -0.2, # Effect of RH on transmission
            "eps" = 1, # Fraction of infections conferring sterilizing immunity (1: SIR, 0: SIS)
-           "alpha" = 0, # Rate of waning immunity (per week)
+           "alpha" = 1 / (2 * 52), # Rate of waning immunity (per week)
            "rho_mean" = 0.1, # Average reporting probability 
            "rho_k" = 0.04) # Reporting over-dispersion
 
@@ -31,7 +33,7 @@ clim_dat <- readRDS("_data/clim_data.rds")
 e_Te <- parms["e_Te"]
 e_RH <- parms["e_RH"]
 
-clim_dat <- CreateClimData(loc_nm = "LEVS", n_years = 10)
+clim_dat <- CreateClimData(loc_nm = "Rostock", n_years = 10)
 
 # Calculate seasonal term of transmission rate
 clim_dat <- clim_dat %>% 
@@ -83,40 +85,74 @@ covars <- clim_dat %>%
 PompMod <- CreateMod(covars_df = covars, lin_bool_val = T)
 
 # Set parameters
-coef(PompMod, names(parms)) <- unname(parms)
+pomp::coef(PompMod, names(parms)) <- unname(parms)
 
 
-# Run simulations ---------------------------------------------------------
-coef(PompMod, "eps") <- 0 
-coef(PompMod, "alpha") <- 1 / (1 * 52)
-coef(PompMod, c("e_Te", "e_RH")) <- -0.2
-coef(PompMod, "R0") <- 1.25
+# Run deterministic simulation ---------------------------------------------------------
+# coef(PompMod, "eps") <- 1
+# coef(PompMod, "alpha") <- 1 / (1 * 52)
+# coef(PompMod, c("e_Te", "e_RH")) <- -0.2
+# coef(PompMod, "R0") <- 1.25
 rho_mean_val <- unname(coef(PompMod, "rho_mean"))
 rho_k_val <- unname(coef(PompMod, "rho_k"))
 
 # Run trajectory and generate observations 
 # NB: this can be done via the rmeasure function in pomp
 # but it's actually easier to apply the observation model directly, as follows
-sim <- trajectory(object = PompMod, format = "data.frame")
-sim <- sim %>% 
+sim_det <- trajectory(object = PompMod, format = "data.frame")
+sim_det <- sim_det %>% 
   mutate(N_sim = S + I + R, 
+         .id = NULL,
          CC_obs = rnbinom(n = length(CC), mu = rho_mean_val * CC, size = 1 / rho_k_val))
 
 # Data in long format
-sim_long <- sim %>% 
-  pivot_longer(cols = -c(week, .id), names_to = "state_var", values_to = "value") %>% 
+sim_det_long <- sim_det %>% 
+  pivot_longer(cols = -week, names_to = "state_var", values_to = "value") %>% 
   mutate(state_var = factor(state_var, levels = c("S", "I", "R", "N_sim", "CC", "CC_obs")),
          N = unname(coef(PompMod, "N")))
 
 # Plot variables
-pl <- ggplot(data = sim_long %>% filter(week > 0), 
-             mapping = aes(x = week / 52, y = value / N, color = .id)) + 
+pl <- ggplot(data = sim_det_long %>% filter(week > 0), 
+             mapping = aes(x = week / 52, y = value / N)) + 
   geom_line() + 
   #scale_y_sqrt() +
   scale_x_continuous(breaks = 1:10) + 
   facet_wrap(~ state_var, scales = "free_y") + 
   labs(x = "Year", y = "Proportion")
 print(pl)
+
+# Run stochastic simulation -----------------------------------------------
+sim_stoch <- GenStochsim(pomp_mod = PompMod, beta_sigma = 1e-1)
+sim_stoch <- sim_stoch %>% 
+  mutate(N_sim = S + I + R)
+
+# Data in long format
+sim_stoch_long <- sim_stoch %>% 
+  pivot_longer(cols = -week, names_to = "state_var", values_to = "value") %>% 
+  mutate(state_var = factor(state_var, levels = c("S", "I", "R", "N_sim", "CC", "CC_obs")),
+         N = unname(coef(PompMod, "N")))
+
+# Plot variables
+pl <- ggplot(data = sim_stoch_long %>% filter(week > 0), 
+             mapping = aes(x = week / 52, y = value / N)) + 
+  geom_line() + 
+  #scale_y_sqrt() +
+  scale_x_continuous(breaks = 1:10) + 
+  facet_wrap(~ state_var, scales = "free_y") + 
+  labs(x = "Year", y = "Proportion")
+print(pl)
+
+# Plot all ----------------------------------------------------------------
+sim_all <- bind_rows(sim_det_long %>% mutate(type = "det"), 
+                     sim_stoch_long %>%  mutate(type = "stoch"))
+
+pl <- ggplot(data = sim_all %>% filter(state_var != "CC_obs"), 
+             mapping = aes(x = week, y = value / N, color = type)) + 
+  geom_line() + 
+  facet_wrap(~ state_var, scales = "free_y", ncol = 2) + 
+  labs(x = "Time (weeks)", y = "Value")
+print(pl)
+
 
 #######################################################################################################
 # END

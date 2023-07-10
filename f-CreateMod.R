@@ -30,7 +30,7 @@ static double pred_RH(double Te, double Td) {
 }
 "
   
-  # Csnippet for determinisitic skeleton
+  # Csnippet for deterministic skeleton
   det_process_model <- Csnippet("
 
   // Calculate transmission rate and force of infection
@@ -82,17 +82,17 @@ static double pred_RH(double Te, double Td) {
               dmeasure = dobs_model,
               rinit = init_mod,
               globals = RH_Cfun,
-              params = c("mu" = 1 / 80 / 52, 
-                         "N" = 5e6,
-                         "R0" = 1.25,
-                         "e_Te" = 0, 
-                         "Te_mean" = mean(covars$Te, na.rm = T), 
-                         "e_RH" = 0,
-                         "RH_mean" = mean(covars$RH_pred, na.rm = T),
-                         "eps" = 1, 
-                         "alpha" = 0,
-                         "rho_mean" = 1,
-                         "rho_k" = 0.04,
+              params = c("mu" = 1 / 80 / 52, # Birth rate (per week)
+                         "N" = 5e6, # Total population size
+                         "R0" = 1.25, # Reproduction no
+                         "e_Te" = 0, # Effect of temperature
+                         "Te_mean" = mean(covars$Te, na.rm = T), # Temporal mean of Te 
+                         "e_RH" = 0, # Effect of RH
+                         "RH_mean" = mean(covars$RH_pred, na.rm = T), # Temporal mean of RH
+                         "eps" = 1, # Fraction of infections conferring immunity
+                         "alpha" = 0, # Waning rate 
+                         "rho_mean" = 1, # Average reporting probability
+                         "rho_k" = 0.04, # Reporting over-dispersion
                          "lin_bool" = as.integer(lin_bool_val)), 
               paramnames = c("mu", "N", "R0", "e_Te", "Te_mean", 
                              "e_RH", "RH_mean", "eps", "alpha", "rho_mean",
