@@ -30,6 +30,7 @@ save_plot <- T # Should all the plots be saved as a pdf?
 parms <- c("mu" = 1 / 80 / 52, # Birth rate 
            "N" = 5e6, # Total population size
            "R0" = 1.25, # Basic reproduction no
+           "sigma_beta" = 0.02, # SD of environmental noise (set to 0 for a deterministic process model)
            "e_Te" = -0.2, # Effect of Te on transmission 
            "e_RH" = -0.2, # Effect of RH on transmission
            "eps" = 1, # Fraction of infections conferring sterilizing immunity (1: SIR, 0: SIS)
@@ -149,9 +150,9 @@ pl <- ggplot(data = sim_long,
   facet_wrap(~ state_var, scales = "free_y", ncol = 2, dir = "v") + 
   labs(x = "Year", y = "Proportion", 
        title = "All model variables, time plot (deterministic model)", 
-       subtitle = sprintf("R0=%.2f, 1/alpha=%.1f yr, rho_mean=%.1f, rho_k=%.2f, N=%.1f M, eps=%.1f, e_Te=%.1f, e_RH=%.1f", 
+       subtitle = sprintf("R0=%.2f, 1/alpha=%.1f yr, rho_mean=%.1f, rho_k=%.2f\nN=%.1f M, eps=%.1f, e_Te=%.1f, e_RH=%.1f, s_beta=%.2f", 
                           parms["R0"], 1 / parms["alpha"] / 52, parms["rho_mean"], parms["rho_k"], parms["N"] / 1e6, parms["eps"], 
-                          parms["e_Te"], parms["e_RH"]))
+                          parms["e_Te"], parms["e_RH"], parms["sigma_beta"]))
 print(pl)
 
 # Generate observations, assuming only observation noise ---------------------------------------------------
@@ -172,14 +173,14 @@ matplot(sim$week, CC_obs_noiseObs, type = "l", lty = 1,
 lines(sim$week, sim$CC * parms["rho_mean"], col = "red", lwd = 2)
 
 # Generate observation, assuming observation AND process noise ----------------------------------------------------
-sim_noiseAll <- freeze(seed = 2186L, 
-                       expr = replicate(n = n_rep, 
-                                        expr = GenStochsim(pomp_mod = PompMod, beta_sigma = 0.02),
-                                        simplify = F)) 
-sim_noiseAll <- sim_noiseAll %>% 
-  bind_rows(.id = "sim")
+
+sim_noiseAll <- simulate(object = PompMod, 
+                         nsim = n_rep, 
+                         seed = 2186L, 
+                         format = "data.frame")
 
 CC_obs_noiseAll <- sim_noiseAll %>% 
+  rename("sim" = ".id") %>% 
   select(sim, week, CC_obs) %>% 
   pivot_wider(names_from = "sim", values_from = "CC_obs") %>% 
   arrange(week) %>% 
@@ -191,7 +192,6 @@ matplot(sim$week, CC_obs_noiseAll, type = "l", lty = 1,
         main = sprintf("%d generated datasets, with observation and process noise", n_rep), 
         col = "grey")
 lines(sim$week, sim$CC * parms["rho_mean"], col = "red", lwd = 2)
-#lines(sim$week, sim$CC, col = "red", lwd = 2)
 
 # Run estimation for climatic parameters -------------------------------------------------------------
 

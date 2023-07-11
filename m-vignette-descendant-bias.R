@@ -11,7 +11,6 @@ source("f-Pred_RH.R")
 Pred_RH <- Vectorize(FUN = Pred_RH)
 source("f-CreateMod.R")
 source("f-CreateClimData.R")
-
 source("s-base_packages.R")
 library("mgcv")
 library("pomp")
@@ -22,6 +21,7 @@ save_plot <- T # Should all the plots be saved as a pdf?
 parms <- c("mu" = 1 / 80 / 52, # Birth rate 
            "N" = 5e6, # Total population size
            "R0" = 1.25, # Basic reproduction no
+           "sigma_beta" = 0, # SD of environmental noise (set to 0 for a deterministic process model)
            "e_Te" = -0.2, # Effect of Te on transmission 
            "e_RH" = -0.2, # Effect of RH on transmission
            "eps" = 1, # Fraction of infections conferring sterilizing immunity (1: SIR, 0: SIS)
@@ -38,7 +38,7 @@ parms <- c("mu" = 1 / 80 / 52, # Birth rate
 e_Te <- parms["e_Te"]
 e_RH <- parms["e_RH"]
 loc_nm <- "Rostock"
-if(save_plot) pdf(file = sprintf("_saved/m-vignette-descendant-bias-%s.pdf", loc_nm), width = 8, height = 8)
+if(save_plot) pdf(file = sprintf("_saved/vignette-descendant-bias-%s.pdf", loc_nm), width = 8, height = 8)
 
 clim_dat <- CreateClimData(loc_nm = loc_nm, n_years = 10)
 
@@ -54,19 +54,23 @@ clim_dat_long <- clim_dat %>%
 pl <- ggplot(data = clim_dat_long %>% filter(var %in% c("Te", "Td", "RH", "RH_pred")), 
              mapping = aes(x = week_date, y = value)) + 
   geom_line() + 
-  facet_wrap(~ var, scales = "free_y", ncol = 2)
+  facet_wrap(~ var, scales = "free_y", ncol = 2) + 
+  labs(x = "Time (weeks)", y = "Value", 
+       title = sprintf("Climatic data, time plot (location: %s)", loc_nm))
 print(pl)
 
 # Plot measured and predicted RH
 pl <- ggplot(data = clim_dat, mapping = aes(x = RH, y = RH_pred)) + 
   geom_point() + 
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed")
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") + 
+  labs(title = "Agreement between RH and RH_pred")
 print(pl)
 
 # Plot time series of measured and predicted RH
 pl <- ggplot(data = clim_dat, mapping = aes(x = week_date, y = RH)) + 
   geom_line() + 
-  geom_line(mapping = aes(x = week_date, y = RH_pred), color = "red")
+  geom_line(mapping = aes(x = week_date, y = RH_pred), color = "red") + 
+  labs(title = "Agreement between RH and RH_pred (red curve)")
 print(pl)
 
 # Season plots of all climatic variables
@@ -77,12 +81,14 @@ pl <- ggplot(data = clim_dat_long %>% filter(var %in% c("Te_norm", "Td_norm", "R
              )) + 
   geom_line(color = "grey") + 
   geom_smooth(mapping = aes(x = isoweek(week_date), y = value, group = NULL, color = NULL)) + 
-  facet_wrap(~ var, scales = "fixed", ncol = 2)
+  facet_wrap(~ var, scales = "fixed", ncol = 2) + 
+  labs(x = "Week no", y = "Rescaled value", title = "Climatic data, season plot")
 print(pl)
 
 # Plot seasonal forcing of transmission rate
 pl <- ggplot(data = clim_dat, mapping = aes(x = week_date, y = beta_seas)) + 
-  geom_line()
+  geom_line() + 
+  labs(x = "Time (weeks)", title = "Seasonal forcing in transmission rate")
 print(pl)
 
 # Add lagged variables for Te_norm and RH_norm
@@ -122,9 +128,14 @@ p_mat["R0", ] <- all_parms$R0
 p_mat["alpha", ] <- all_parms$alpha
 
 # Simulations
-sim <- trajectory(object = PompMod, 
-                  params = p_mat, 
-                  format = "data.frame")
+sim <- simulate(object = PompMod, 
+                nsim = 1, 
+                params = p_mat, 
+                format = "data.frame")
+
+# sim <- trajectory(object = PompMod, 
+#                   params = p_mat, 
+#                   format = "data.frame")
 sim <- sim %>% 
   mutate(.id = as.integer(.id)) %>% 
   left_join(y = all_parms) %>% 
@@ -147,43 +158,59 @@ for(s in svars_plot) {
                mapping = aes(x = week_no / 52, y = value / N)) + 
     geom_line() + 
     #scale_y_sqrt() +
-    facet_grid(R0 ~ factor(1 / alpha / 52), scales = "free_y") + 
-    #facet_wrap(~ .id + state_var, scales = "free_y", ncol = nrow(all_parms), dir = "v") + 
-    labs(x = "Year", y = "Proportion", title = s)
+    facet_grid(R0 ~ factor(1 / alpha / 52), scales = "free_y") +
+    scale_x_continuous(breaks = 0:10)
+  
+  if(s == "S") {
+    pl <- pl + labs(x = "Year", y = "Proportion", 
+                    title = s, 
+                    subtitle = sprintf("rho_mean=%.1f, rho_k=%.2f, N=%.1f M, eps=%.1f, e_Te=%.1f, e_RH=%.1f, s_beta=%.2f", 
+                                       parms["rho_mean"], parms["rho_k"], parms["N"] / 1e6, parms["eps"], 
+                                       parms["e_Te"], parms["e_RH"], parms["sigma_beta"]))
+  } else {
+    pl <- pl + labs(x = "Year", y = "Proportion", title = s)
+  }
+    
   print(pl)
 }
 
 # Run regressions ---------------------------------------------------------
 n_reps <- 100L # No of stochastic replicates
 
-# Function to run regressions
-f_reg <- function(df, n = 5L) {
+sims_all <- simulate(object = PompMod, 
+                     params = p_mat, 
+                     nsim = n_reps, 
+                     seed = 2186L, 
+                     format = "data.frame")
+
+sims_all <- sims_all %>% 
+  separate(col = ".id", sep = "_", remove = T, into = c(".id", "rep")) %>% 
+  rename("week_no" = "week") %>% 
+  mutate(.id = as.integer(.id), 
+         rep = as.integer(rep)) %>% 
+  select(.id, rep, week_no, everything()) %>% 
+  left_join(y = all_parms) %>% 
+  left_join(y = clim_dat %>% select(week_no, matches("Te_norm|RH_pred_norm"), beta_seas)) %>% 
+  arrange(.id, rep, week_no)
+
+# Function to run GAM regression model
+f_reg <- function(df) {
   
-  df <- df %>% 
-    arrange(week_no) 
-  
-  M_nb <- vector(mode = "list", length = n)
-  
-  # Create observations and fit models
-  for(i in 1:n) {
-    df[[paste0("CC_obs_", i)]] <- rnbinom(n = length(df$CC), mu = rho_mean_val * df$CC, size = 1 / rho_k_val)
-    df[[paste0("CC_obs_lag_", i)]] <-  lag(x = df[[paste0("CC_obs_", i)]], n = 1L, order_by = df$week_no)
-    
-    df_cur <- df %>% select("week_no", Te_norm_lag, RH_pred_norm_lag, paste0(c("CC_obs_", "CC_obs_lag_"), i))
-    colnames(df_cur) <- c("week_no", "Te", "RH", "CC_obs", "CC_obs_lag")
-    M_nb[[i]] <- gam(formula = CC_obs ~ 1 + Te + RH + s(week_no, k = 50), 
-                     family = nb(link = "log"), 
-                     data = df_cur)
-  }
+  # Run GAM model
+  M_nb <- gam(formula = CC_obs ~ 1 + Te_norm_lag + RH_pred_norm_lag + s(week_no, k = 50), 
+              family = nb(link = "log"), 
+              data = arrange(df, week_no))
   
   # Extract regression coefficients
-  M_est <- sapply(M_nb, coef)
-  M_est_se <- sapply(M_nb, function(y) summary(y)$se)
-  R2 <- sapply(M_nb, function(y) summary(y)$r.sq)
-  out <- data.frame(e_Te = M_est["Te", ], 
-                    e_Te_se = M_est_se["Te", ], 
-                    e_RH = M_est["RH", ], 
-                    e_RH_se = M_est_se["RH", ], 
+  M_est <- coef(M_nb)
+  M_est_se <- summary(M_nb)$se
+  R2 <- summary(M_nb)$r.sq
+  
+  # Return
+  out <- data.frame(e_Te = M_est["Te_norm_lag"], 
+                    e_Te_se = M_est_se["Te_norm_lag"], 
+                    e_RH = M_est["RH_pred_norm_lag"], 
+                    e_RH_se = M_est_se["RH_pred_norm_lag"], 
                     R2 = R2)
   
   return(out)
@@ -193,19 +220,18 @@ f_reg <- function(df, n = 5L) {
 sim_reg <- bake(file = sprintf("_saved/vignette-descendant-bias-regressions-%s.rds", loc_nm), 
                 seed = 2186L, 
                 expr = {
-                  sim %>% 
-                    group_nest(.id, eps, R0, alpha) %>% 
-                    mutate(reg = purrr::map(.x = data, .f = f_reg, n = n_reps,  .progress = T)) %>% 
+                  sims_all %>% 
+                    group_nest(.id, rep, eps, R0, alpha) %>% 
+                    mutate(reg = purrr::map(.x = data, .f = f_reg,  .progress = T)) %>% 
                     unnest(cols = "reg") %>% 
                     select(-data)
                 })
- 
+
 sim_reg_long <- sim_reg %>% 
   pivot_longer(cols = e_Te:R2) %>% 
   mutate(R0_fac = R0 %>% factor() %>% fct_relabel(.fun = ~ paste0("R0 = ", .x)))
 
-
-
+# Plots -------------------------------------------------------------------
 # Plot point estimates
 svars_plot <- c("e_Te", "e_RH", "R2")
 for(s in svars_plot) {
