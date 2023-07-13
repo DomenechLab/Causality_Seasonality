@@ -30,16 +30,20 @@ static double pred_RH(double Te, double Td) {
 }
 "
   
-  # Csnippet for determinisitic skeleton
+  # Csnippet for deterministic skeleton
   det_process_model <- Csnippet("
 
-  // Calculate transmission rate and force of infection
-  double beta = R0 * (mu + 1.0); // Transmission rate
-  double RH_pred = pred_RH(Te, Td);
+  // Calculate transmission rate
+  double beta = R0 * (mu + 1.0); // Mean transmission rate
   
+  // Climate-induced seasonality
+  double RH_pred = pred_RH(Te, Td);
   double beta_seas = e_Te * (Te / Te_mean - 1.0) + e_RH * (RH_pred / RH_mean - 1.0); 
   beta_seas = exp(beta_seas);
-  double lambda_t = beta * I / N * beta_seas; // Force of infection
+  beta *= beta_seas; 
+  
+  // Force of infection
+  double lambda_t = beta * I / N; // Force of infection
   double p_SI = lin_bool ? lambda_t : (1.0 - exp(-lambda_t)); // Proportion infected during time step
   
   // Difference equations
@@ -49,9 +53,49 @@ static double pred_RH(double Te, double Td) {
   DCC = p_SI * S; 
 ")
   
-  # Csnippet for observation model
-  obs_model <- Csnippet("
+  # Csnippet for stochastic model
+  stoch_process_model <- Csnippet("
+  
+  double S_new, I_new, R_new, CC_new;
+  
+  // Calculate transmission rate
+  double beta = R0 * (mu + 1.0); // Mean transmission rate
+  
+  // Climate-induced seasonality
+  double RH_pred = pred_RH(Te, Td);
+  double beta_seas = e_Te * (Te / Te_mean - 1.0) + e_RH * (RH_pred / RH_mean - 1.0); 
+  beta_seas = exp(beta_seas);
+  beta *= beta_seas; 
+  
+  // Environmental stochasticity
+  double dW = rgammawn(sigma_beta, 1.0); // Mean: 1, SD: sigma_beta
+  beta *= dW; 
+  
+  // Force of infection
+  double lambda_t = beta * I / N; // Force of infection
+  double p_SI = lin_bool ? lambda_t : (1.0 - exp(-lambda_t)); // Proportion infected during time step
+  
+  // Difference equations
+  S_new = S +  mu * N + (1.0 - eps) * I + alpha * R - (p_SI + mu) * S; 
+  I_new = p_SI * S - mu * I; 
+  R_new = R + eps * I - (alpha + mu) * R; 
+  CC_new = p_SI * S; 
+  
+  // Update
+  S = S_new; 
+  I = I_new; 
+  R = R_new; 
+  CC = CC_new; 
+")
+  
+  # Csnippet for generating observations
+  robs_model <- Csnippet("
   CC_obs = rnbinom_mu(1.0 / rho_k, rho_mean * CC);
+")
+  
+  # Csnippet for evaluating likelihood of observations
+  dobs_model <- Csnippet("
+  lik = dnbinom_mu(nearbyint(CC_obs), 1.0 / rho_k, rho_mean * CC, give_log);
 ")
   
   # Csnippet for initializing state variables
@@ -72,25 +116,30 @@ static double pred_RH(double Te, double Td) {
               covar = covariate_table(select(covars, c("week_no", "Te", "Td")), 
                                       times = "week_no", order = "constant"), 
               statenames = c("S", "I", "R", "CC"), 
-              skeleton = pomp::map(f = det_process_model, delta.t = 1),  
-              rmeasure = obs_model, 
+              skeleton = pomp::map(f = det_process_model, delta.t = 1), 
+              rprocess =  discrete_time(step.fun = stoch_process_model, delta.t = 1),
+              rmeasure = robs_model, 
+              dmeasure = dobs_model,
               rinit = init_mod,
               globals = RH_Cfun,
-              params = c("mu" = 1 / 80 / 52, 
-                         "N" = 5e6,
-                         "R0" = 1.25,
-                         "e_Te" = 0, 
-                         "Te_mean" = mean(covars$Te, na.rm = T), 
-                         "e_RH" = 0,
-                         "RH_mean" = mean(covars$RH_pred, na.rm = T),
-                         "eps" = 1, 
-                         "alpha" = 0,
-                         "rho_mean" = 1,
-                         "rho_k" = 0.04,
+              params = c("mu" = 1 / 80 / 52, # Birth rate (per week)
+                         "N" = 5e6, # Total population size
+                         "R0" = 1.25, # Reproduction no
+                         "sigma_beta" = 0, # SD of environmental noise
+                         "e_Te" = 0, # Effect of temperature
+                         "Te_mean" = mean(covars$Te, na.rm = T), # Temporal mean of Te 
+                         "e_RH" = 0, # Effect of RH
+                         "RH_mean" = mean(covars$RH_pred, na.rm = T), # Temporal mean of RH
+                         "eps" = 1, # Fraction of infections conferring immunity
+                         "alpha" = 0, # Waning rate 
+                         "rho_mean" = 1, # Average reporting probability
+                         "rho_k" = 0.04, # Reporting over-dispersion
                          "lin_bool" = as.integer(lin_bool_val)), 
-              paramnames = c("mu", "N", "R0", "e_Te", "Te_mean", 
-                             "e_RH", "RH_mean", "eps", "alpha", "rho_mean",
-                             "rho_k", "lin_bool")
+              paramnames = c("mu", "N", "R0", "sigma_beta", "e_Te", 
+                             "Te_mean", "e_RH", "RH_mean", "eps", "alpha", 
+                             "rho_mean", "rho_k", "lin_bool"), 
+              partrans = parameter_trans(log = c("R0", "alpha", "rho_k"), 
+                                         logit = c("rho_mean"))
   )
   
   return(mod)
