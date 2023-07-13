@@ -2,10 +2,10 @@
 # Calculate relative humidity (RH) from temperature and dew point temperature
 # See https://www.omnicalculator.com/physics/relative-humidity for details 
 #######################################################################################################
-CreateMod <- function(covars_df, lin_bool_val = T) {
+CreateMod <- function(covars, lin_bool_val = T) {
   
   # Args: 
-  # covars_df: table of covariates: week_no (starting at 0), Te and Td (in degrees celsius) (data frame)
+  # covars: table of covariates: week_no (starting at 0), Te and Td (in degrees celsius) (data frame)
   # lin_bool_val: should the transmission term be linearized? (boolean)
   # Returns: POMP model 
   
