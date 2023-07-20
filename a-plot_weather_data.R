@@ -14,14 +14,20 @@ library(readxl)
 theme_set(theme_bw())
 par(bty = "l", las = 2)
 
+# Path to raw data --------------------------------------------------------
+path_clim_dat <- "/Users/u_domenech/My Drive/Domenech_lab/_Laura/_aproj1_causal_seasonality/_codes/_data"
+countries_nm <- path_clim_dat %>% 
+  list.dirs(full.names = F, recursive = F) %>% 
+  str_remove(pattern = "_")
+
 # Load data ---------------------------------------------------------------
 
 if(!file.exists("_data/clim_data.rds")) {
-  countries_nm <- c("Colombia", "Germany", "Spain")
+  #countries_nm <- c("Colombia", "Germany", "Spain")
   dat_l <- vector(mode = "list", length = length(countries_nm))
   
   for(i in seq_along(countries_nm)) {
-    files_nm <- list.files(path = sprintf("_data/_%s", countries_nm[i])) %>% 
+    files_nm <- list.files(path = sprintf("%s/_%s", path_clim_dat, countries_nm[i]), pattern = ".xlsx") %>% 
       str_remove(pattern = ".xlsx")
     
     dat_l[[i]] <- vector(mode = "list", length = length(files_nm))
@@ -33,7 +39,7 @@ if(!file.exists("_data/clim_data.rds")) {
       
       print(sprintf("Country: %s, var: %s, location: %s", countries_nm[i], clim_var_nm, loc_nm))
       
-      dat_l[[i]][[j]] <- read_xlsx(path = sprintf("_data/_%s/%s_%s.xlsx", countries_nm[i], clim_var_nm, loc_nm), 
+      dat_l[[i]][[j]] <- read_xlsx(path = sprintf("%s/_%s/%s_%s.xlsx", path_clim_dat, countries_nm[i], clim_var_nm, loc_nm), 
                                    col_names = F, 
                                    col_types = c("date", "text"))
       colnames(dat_l[[i]][[j]]) <- c("day", clim_var_nm)
@@ -77,6 +83,7 @@ if(!file.exists("_data/clim_data.rds")) {
            loc = factor(loc))
   
   saveRDS(object = dat_wide, file = "_data/clim_data.rds")
+  saveRDS(object = dat_wide, file = sprintf("%s/clim_data.rds", path_clim_dat))
 } else {
   dat_wide <- readRDS("_data/clim_data.rds")
 }
@@ -135,15 +142,15 @@ dat_week_CV <- dat_week %>%
          clim_var = factor(clim_var))
 
 # Plot CV across locations in Spain and Colombia
-pl <- ggplot(data = dat_week_CV %>% filter(country %in% c("Spain", "Colombia", "Germany"), clim_var %in% c("Te", "RH_pred")), 
+pl <- ggplot(data = dat_week_CV %>% filter(country %in% countries_nm, clim_var %in% c("Te", "RH_pred")), 
              mapping = aes(x = country, y = CV, label = loc)) + 
   geom_point() + 
   geom_text_repel(max.overlaps = Inf) + 
-  facet_wrap(~ clim_var)  + 
+  facet_wrap(~ clim_var, ncol = 1, scales = "free")  + 
   labs(x = "Country", y = "Coefficient of variation")
 print(pl)
 
-ggsave(filename = "_figures/CV_RH_Te.pdf", width = 12, height = 8)
+ggsave(filename = "_figures/CV_RH_Te.pdf", width = 10, height = 10)
 
 # Plot
 dat_week_rho <- dat_week %>% 
@@ -153,12 +160,12 @@ dat_week_rho <- dat_week %>%
   mutate(country = factor(country), 
          loc = factor(loc))
 
-pl <- ggplot(data = dat_week_rho %>% filter(country %in% c("Spain", "Colombia", "Germany")), 
-               mapping = aes(x = country, y = abs(rho), label = loc)) + 
-    geom_point() + 
-    geom_text_repel(max.overlaps = Inf) + 
-    labs(x = "Country", y = "rho(Te, RH)")
-  print(pl)
+pl <- ggplot(data = dat_week_rho %>% filter(country %in% countries_nm), 
+             mapping = aes(x = country, y = abs(rho), label = loc)) + 
+  geom_point() + 
+  geom_text_repel(max.overlaps = Inf) + 
+  labs(x = "Country", y = "rho(Te, RH)")
+print(pl)
 ggsave(filename = "_figures/rho_RH_Te.pdf", width = 8, height = 8)
 
 
