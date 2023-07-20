@@ -24,7 +24,7 @@ library("corrplot")
 
 theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
 par(bty = "l", las = 1, lwd = 2)
-save_plot <- T # Should all the plots be saved as a pdf? 
+save_plot <- F # Should all the plots be saved as a pdf? 
 
 # Set model parameters ----------------------------------------------------
 parms <- c("mu" = 1 / 80 / 52, # Birth rate 
@@ -109,7 +109,7 @@ covars <- clim_dat %>%
   arrange(week_date)
 
 # Create pomp model -------------------------------------------------------
-PompMod <- CreateMod(covars_df = covars, lin_bool_val = T)
+PompMod <- CreateMod(covars = covars, lin_bool_val = T)
 
 # Set parameters
 pomp::coef(PompMod, names(parms)) <- unname(parms)
@@ -306,42 +306,13 @@ pl <- ggplot(data = est_perf, mapping = aes(x = par, y = value)) +
   labs(x = "Parameter", y = "Value", title = "Estimation performance")
 print(pl)
 
-# Profile likelihood for one fit ------------------------------------------
-# # Select run with highest likelihood
-# fit_no <- pars_mle_se$sim_no[which.max(pars_mle_se$ll)]
-# fit_cur <- fits[[fit_no]]
-# 
-# # Extract profiles
-# # NB: z represents the square-root of the deviance 
-# prof2 <- try(profile(fitted = fit_cur, which = c("e_Te", "e_RH")))
-# prof_Te <- prof2@profile$e_Te 
-# prof_Te <- data.frame(z = prof_Te$z, prof_Te$par.vals)
-# prof_RH <- prof2@profile$e_RH
-# prof_RH <- data.frame(z = prof_RH$z, prof_RH$par.vals)
-# 
-# # Plot
-# q_95p <- qchisq(p = 0.95, df = 1)
-# CIs <- confint(prof2)
-# 
-# pl_Te <- ggplot(data = prof_Te, 
-#                 mapping = aes(x = e_Te, y = e_RH, color = abs(z))) + 
-#   #geom_point() +
-#   geom_vline(xintercept = CIs["e_Te", ], linetype = "dashed", color = "grey") + 
-#   geom_line() + 
-#   scale_color_viridis(option = "viridis", direction = -1) +
-#   theme_classic() + 
-#   labs(x = "e_Te", y = "e_RH", title = "Profile for e_Te")
-# print(pl_Te)
-# 
-# pl_RH <- ggplot(data = prof_RH, 
-#                 mapping = aes(x = e_RH, y = e_Te, color = abs(z))) + 
-#   #geom_point() +
-#   geom_vline(xintercept = CIs["e_RH", ], linetype = "dashed", color = "grey") + 
-#   geom_line() + 
-#   scale_color_viridis(option = "viridis", direction = -1) +
-#   theme_classic() + 
-#   labs(x = "e_RH", y = "e_Te", title = "Profile for e_RH")
-# print(pl_RH)
+# Save everything -------------------------------------------------------
+to_save <- list(sim_det = sim, 
+                sim_stoch = sim_noiseAll, 
+                pars_est = pars_mle_se)
+
+saveRDS(object = to_save, 
+        file = sprintf("_saved/vignette-quasi-experiments-%s-all.rds", loc_nm))
 
 # End  statements ---------------------------------------------------------------------
 if(save_plot) dev.off()
