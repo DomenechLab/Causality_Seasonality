@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       158,          7]
-NotebookDataLength[      8531,        202]
-NotebookOptionsPosition[      7469,        178]
-NotebookOutlinePosition[      7890,        195]
-CellTagsIndexPosition[      7847,        192]
+NotebookDataLength[      8781,        207]
+NotebookOptionsPosition[      7718,        183]
+NotebookOutlinePosition[      8139,        200]
+CellTagsIndexPosition[      8096,        197]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -42,7 +42,10 @@ Cell[BoxData[{
      "\"\<Cartagena\>\"", ",", "\"\<SKPE\>\"", ",", "\"\<SKMR\>\"", ",", 
      "\"\<SKNV\>\"", ",", "\"\<Villavicencio\>\"", ",", "\"\<SKPS\>\"", ",", 
      "\"\<SKCC\>\"", ",", "\"\<Armenia\>\"", ",", "\"\<SKAR\>\"", ",", 
-     "\"\<SKCL\>\""}], "}"}]}], ";"}], "\[IndentingNewLine]", 
+     "\"\<SKCL\>\"", ",", " ", "\"\<SKCG\>\"", ",", "\"\<SKLT\>\"", ",", 
+     "\"\<SKPC\>\"", ",", "\"\<SKRH\>\"", ",", "\"\<SKSM\>\"", ",", 
+     "\"\<SKUC\>\"", ",", "\"\<SKUI\>\"", ",", "\"\<SKVP\>\"", ",", 
+     "\"\<SKVV\>\""}], "}"}]}], ";"}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{"locListSpain", "=", 
    RowBox[{"{", 
@@ -80,19 +83,21 @@ Cell[BoxData[{
   3.894622357021439*^9, 3.89462235937453*^9}, {3.8951983324526243`*^9, 
   3.895198445827582*^9}, {3.898825746748478*^9, 3.898825877636128*^9}, {
   3.898825940864118*^9, 3.8988259651246853`*^9}, {3.898827392320581*^9, 
-  3.898827576951858*^9}},
- CellLabel->"In[48]:=",ExpressionUUID->"6301c30c-3ad7-4d90-8194-3d750ec82c9d"],
+  3.898827576951858*^9}, {3.899193143921729*^9, 
+  3.8991931851909523`*^9}},ExpressionUUID->"6301c30c-3ad7-4d90-8194-\
+3d750ec82c9d"],
 
 Cell[BoxData[
  RowBox[{
   RowBox[{"locList", " ", "=", " ", 
-   RowBox[{"DeleteDuplicates", "[", "locListEcuador", "]"}]}], ";"}]], "Input",\
-
+   RowBox[{"DeleteDuplicates", "[", "locListColombia", "]"}]}], 
+  ";"}]], "Input",
  CellChangeTimes->{{3.894622374755684*^9, 3.894622394542007*^9}, 
    3.8946224534075327`*^9, 3.894622521120137*^9, 3.8946904213360662`*^9, 
    3.895198452207747*^9, 3.8988259087140617`*^9, 3.898826145254513*^9, 
-   3.89882621765692*^9, 3.8988265006881437`*^9, 3.89882763448737*^9},
- CellLabel->"In[52]:=",ExpressionUUID->"f05989df-3595-4b7f-98f3-9d2bb9562e0c"],
+   3.89882621765692*^9, 3.8988265006881437`*^9, 3.89882763448737*^9, 
+   3.8991931902482357`*^9},ExpressionUUID->"f05989df-3595-4b7f-98f3-\
+9d2bb9562e0c"],
 
 Cell[BoxData[
  RowBox[{
@@ -195,14 +200,14 @@ CellTagsIndex->{}
 (*NotebookFileOutline
 Notebook[{
 Cell[558, 20, 673, 13, 59, "Input",ExpressionUUID->"1c6604f3-640a-43e5-9d11-8b237fd8edc3"],
-Cell[1234, 35, 2413, 48, 224, "Input",ExpressionUUID->"6301c30c-3ad7-4d90-8194-3d750ec82c9d"],
-Cell[3650, 85, 503, 9, 59, "Input",ExpressionUUID->"f05989df-3595-4b7f-98f3-9d2bb9562e0c"],
-Cell[4156, 96, 208, 5, 59, "Input",ExpressionUUID->"f98d1c15-61c3-4adf-9935-0371a5004f40"],
-Cell[4367, 103, 360, 8, 59, "Input",ExpressionUUID->"19123f49-3bc1-4a06-bf24-2c7b05a1b202"],
-Cell[4730, 113, 1897, 44, 306, "Input",ExpressionUUID->"96192024-5f4d-4cd4-8c22-9fa6fb89d0f9"],
+Cell[1234, 35, 2654, 52, 265, "Input",ExpressionUUID->"6301c30c-3ad7-4d90-8194-3d750ec82c9d"],
+Cell[3891, 89, 511, 10, 59, "Input",ExpressionUUID->"f05989df-3595-4b7f-98f3-9d2bb9562e0c"],
+Cell[4405, 101, 208, 5, 59, "Input",ExpressionUUID->"f98d1c15-61c3-4adf-9935-0371a5004f40"],
+Cell[4616, 108, 360, 8, 59, "Input",ExpressionUUID->"19123f49-3bc1-4a06-bf24-2c7b05a1b202"],
+Cell[4979, 118, 1897, 44, 306, "Input",ExpressionUUID->"96192024-5f4d-4cd4-8c22-9fa6fb89d0f9"],
 Cell[CellGroupData[{
-Cell[6652, 161, 180, 2, 59, "Input",ExpressionUUID->"67a0384e-5b41-4acd-809d-a0779e475b85"],
-Cell[6835, 165, 618, 10, 103, "Output",ExpressionUUID->"c0715b89-ea30-42ff-adc7-9715bcb4a7e5"]
+Cell[6901, 166, 180, 2, 59, "Input",ExpressionUUID->"67a0384e-5b41-4acd-809d-a0779e475b85"],
+Cell[7084, 170, 618, 10, 67, "Output",ExpressionUUID->"c0715b89-ea30-42ff-adc7-9715bcb4a7e5"]
 }, Open  ]]
 }
 ]
