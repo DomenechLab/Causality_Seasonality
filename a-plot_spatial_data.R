@@ -19,7 +19,7 @@ dirs$figures <- "_figures"
 # Load data ----------------------------------------------------------------------------------------
 
 if(!file.exists(glue("{dirs$data}/spat_data.rds"))) {
-  spat_dat <- read_excel(glue("{dirs$data}/countries_coordinates.xlsx")) %>%
+  spat_dat <- readxl::read_excel(glue("{dirs$data}/countries_coordinates.xlsx")) %>%
     separate(loc_city_station, sep = " ", into = c("loc", "rest")) %>%
     select(-c(rest, loc_city_airport)) %>%
     rename(loc_city_name = 3,

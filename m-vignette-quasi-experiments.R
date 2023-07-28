@@ -44,7 +44,7 @@ parms <- c("mu" = 1 / 80 / 52, # Birth rate
 
 e_Te <- parms["e_Te"]
 e_RH <- parms["e_RH"]
-loc_nm <- "SKBO"
+loc_nm <- "Rostock"
 if(save_plot) pdf(file = sprintf("_saved/vignette-quasi-experiments-%s.pdf", loc_nm), width = 8, height = 8)
 
 clim_dat <- CreateClimData(loc_nm = loc_nm, n_years = 10)

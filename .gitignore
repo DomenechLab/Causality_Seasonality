@@ -3,8 +3,11 @@
 .RData
 .Ruserdata
 *.pdf
+*.jpg
+*.png
 *.xlsx
 *.xls
 z-dump.R
 .DS_Store
 test.R
+_archiv

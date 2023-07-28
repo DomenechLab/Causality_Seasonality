@@ -14,16 +14,16 @@ fun_SimulationsMod <- function(loc = "Cartagena",
   PompMod <- CreateMod(covars = covars_l[[loc]], lin_bool_val = T)
   
   # Set parameters
-  coef(PompMod, names(parms)) <- unname(parms)
+  pomp::coef(PompMod, names(parms)) <- unname(parms)
   base_pars <- coef(PompMod)
   
   # Run simulations
-  coef(PompMod, names(base_pars)) <- unname(base_pars)
-  rho_mean_val <- unname(coef(PompMod, "rho_mean"))
+  pomp::coef(PompMod, names(base_pars)) <- unname(base_pars)
+  rho_mean_val <- unname(pomp::coef(PompMod, "rho_mean"))
   rho_k_val <- 0.04 # Reporting overdispersion
-  N_val <- unname(coef(PompMod, "N"))
+  N_val <- unname(pomp::coef(PompMod, "N"))
   
-  p_mat <- parmat(params = coef(PompMod), 
+  p_mat <- parmat(params = pomp::coef(PompMod), 
                   nrep = nrow(all_parms))
   p_mat["eps", ] <- all_parms$eps
   p_mat["R0", ] <- all_parms$R0
