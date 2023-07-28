@@ -5,11 +5,52 @@
 # Load packages -----------------------------------------------------------
 rm(list = ls())
 source("s-base_packages.R")
+source("f-Pred_RH.R")
+Pred_RH <- Vectorize(FUN = Pred_RH)
+source("f-CreateClimData.R")
 theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
 save_plot <- F # Should all the plots be saved as a pdf? 
 
-# Vignette on quasi-experiments -------------------------------------------
+#######################################################################################################
+# VIGNETTE ON QUASI-EXPERIMENTS
+#######################################################################################################
 
+# Load climatic data ------------------------------------------------------
+loc_nm <- c("Bogota", "Rostock")
+clim_dat <- vector(mode = "list", length = 2)
+names(clim_dat) <- loc_nm
+
+clim_dat[["Bogota"]] <- CreateClimData(loc_nm = "SKBO", n_years = 10)
+clim_dat[["Rostock"]] <- CreateClimData(loc_nm = "Rostock", n_years = 10)
+
+clim_dat <- clim_dat %>% 
+  bind_rows(.id = "loc") %>% 
+  pivot_longer(cols = -c("loc", "week_date", "week_no", "week"), 
+               names_to = "clim_var", 
+               values_to = "value")
+
+pl <- ggplot(data = clim_dat %>% filter(clim_var %in% c("Te_norm", "RH_pred_norm")), 
+             mapping = aes(x = week, 
+                           y = value, 
+                           group = interaction(factor(year(week_date)), clim_var),
+                           color = clim_var)) + 
+  geom_line(alpha = 0.5) + 
+  geom_smooth(mapping = aes(x = week, y = value, group = clim_var, color = clim_var), se = F) + 
+  facet_wrap(~ loc, scales = "free_y", ncol = 2) + 
+  scale_color_brewer(palette = "Set2", labels = c("RH", "Te")) + 
+  theme_classic() + 
+  theme(legend.position = "top", 
+        strip.background = element_blank(), 
+        strip.text = element_text(colour = "black", size = rel(1))) + 
+  labs(x = "Week no", y = "Renormalized value", color = "")
+print(pl)
+
+ggsave(plot = pl, 
+       filename = "_figures/_supp/vignette-quasi-experiments-s1.pdf", 
+       width = 10, 
+       height = 8)
+
+# Load simulations and estimations  ---------------------------------------
 loc_nm <- c("Rostock", "Bogota") # Names of locations
 res_all <- vector(mode = "list", length = length(loc_nm)) # List to contain all the results
 names(res_all) <- loc_nm
@@ -54,7 +95,8 @@ pl_up <- ggplot(data = tmp %>% filter(.id %in% id_sims, var == "CC"),
   geom_line(data = tmp2, mapping = aes(x = week, y = 1e2 * CC / N_val), color = "black") +
   facet_wrap(~ loc, scales = "free_y", ncol = 2) + 
   theme_classic() + 
-  theme(strip.background = element_blank()) + 
+  theme(strip.background = element_blank(), 
+        strip.text = element_text(size = rel(1), colour = "black")) + 
   labs(x = "Time (weeks)", y = "Total cases (per week per 100)")
 print(pl_up)
 
@@ -62,22 +104,23 @@ print(pl_up)
 tmp <- list(res_all[[1]]$pars_est, res_all[[2]]$pars_est)
 names(tmp) <- loc_nm
 tmp <- bind_rows(tmp, .id = "loc")
+tmp <- tmp %>% 
+  filter(par %in% c("e_Te", "e_RH")) %>% 
+  mutate(par = factor(par, levels = c("e_Te", "e_RH"), labels = c("Temperature", "Relative humidity")))
 
-pl_low <- ggplot(data = tmp %>% filter(par %in% c("e_Te", "e_RH")), 
-                 mapping = aes(x = par, y = mle)) + 
-  geom_boxplot(outlier.color = "grey") + 
-  geom_point(data = pars_true %>% filter(par %in% c("e_Te", "e_RH")), 
-             mapping = aes(x = par, y = true), 
-             color = "blue", 
-             size = rel(3), shape = 17) +
-  facet_wrap(~ loc, scales = "fixed", ncol = 2) + 
+pl_low <- ggplot(data = tmp, 
+                 mapping = aes(x = mle, color = loc, fill = loc)) + 
+  geom_vline(xintercept = pars_true$true[pars_true$par == "e_Te"], linetype = "dotted") + 
+  geom_density(alpha = 0.1, adjust = 2) + 
+  geom_rug(alpha = 0.5) + 
+  facet_wrap(~ par, scales = "fixed", ncol = 2) + 
+  scale_color_brewer(palette = "Set2") + 
+  scale_fill_brewer(palette = "Set2") + 
   theme_classic() +
-  theme(panel.grid.major.y = element_line(colour = "grey92"), 
-        axis.line.y.left = element_line(color = "black"),
-        strip.text = element_blank()) + 
-  scale_x_discrete(labels = c("e_Te" = "Temperature", "e_RH" = "Relative humidity")) + 
-  ylim(-0.5, 0.25) + 
-  labs(x = "Climatic effect parameter", y = "Estimate")
+  theme(strip.background = element_blank(),
+        strip.text = element_text(size = rel(1), colour = "black"),
+        legend.position = c(0.5, 0.8)) + 
+  labs(x = "Parameter estimate", y = "Density", color = "", fill = "")
 print(pl_low)
 
 # Assemble graph
@@ -85,10 +128,10 @@ pl_all <- pl_up / pl_low +
   plot_annotation(tag_levels = "A")
 print(pl_all)
 
-ggsave(filename = "_figures/_main/vignette-quasi-experiments.pdf", 
+ggsave(filename = "_figures/_main/vignette-quasi-experiments-m1.pdf", 
        plot = pl_all, 
        width = 10, 
-       height = 10)
+       height = 8)
 
 # Make supp figures -------------------------------------------------------
 tmp <- list(res_all[[1]]$pars_est, res_all[[2]]$pars_est)
@@ -100,26 +143,32 @@ tmp <- bind_rows(tmp, .id = "loc") %>%
 tmp$mle[tmp$par %in% c("R0", "alpha", "rho_k")] <- exp(tmp$mle[tmp$par %in% c("R0", "alpha", "rho_k")])
 tmp$mle[tmp$par == "rho_mean"] <- plogis(tmp$mle[tmp$par == "rho_mean"]) 
 
-pl_supp <- ggplot(data = tmp %>% filter(!(par %in% c("e_Te", "e_RH"))), 
-                  mapping = aes(x = loc, y = mle)) + 
-  geom_boxplot(outlier.color = "grey") + 
-  geom_hline(data = pars_true %>% filter(!(par %in% c("e_Te", "e_RH"))),
-             mapping = aes(yintercept = true),
-             color = "blue", 
-             linetype = "dashed") +
-  facet_wrap(~ par, scales = "free", ncol = 2, 
+pl_supp <- ggplot(data = tmp, 
+                  mapping = aes(x = mle, color = loc, fill = loc)) + 
+  geom_vline(data = pars_true %>% filter(!(par %in% c("e_Te", "e_RH"))),
+             mapping = aes(xintercept = true),
+             color = "black", 
+             linetype = "dotted") +
+  geom_density(alpha = 0.1, adjust = 2) + 
+  geom_rug(alpha = 0.5) + 
+  facet_wrap(~ par, 
+             scales = "free", 
+             ncol = 2, 
              labeller = as_labeller(c("alpha" = "Waning rate (per week)", 
                                       "R0" = "Reproduction number", 
                                       "rho_k" = "Reporting overdispersion", 
                                       "rho_mean" = "Average reporting probability"))) + 
+  scale_color_brewer(palette = "Set2") + 
+  scale_fill_brewer(palette = "Set2") + 
   theme_classic() +
-  theme(panel.grid.major.y = element_line(colour = "grey92"), 
-        strip.background = element_blank()) + 
-  scale_y_log10() + 
-  labs(x = "Parameter", y = "Estimate")
+  theme(strip.background = element_blank(), 
+        strip.text = element_text(size = rel(1), colour = "black"), 
+        legend.position = "top") + 
+  scale_x_log10() + 
+  labs(x = "Parameter estimate", y = "Density", color = "", fill = "")
 print(pl_supp)
 
-ggsave(filename = "_figures/_supp/vignette-quasi-experiments.pdf", 
+ggsave(filename = "_figures/_supp/vignette-quasi-experiments-s2.pdf", 
        plot = pl_supp, 
        width = 10, 
        height = 8)
