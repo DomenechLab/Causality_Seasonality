@@ -168,6 +168,24 @@ pl <- ggplot(data = dat_week_rho %>% filter(country %in% countries_nm),
 print(pl)
 ggsave(filename = "_figures/rho_RH_Te.pdf", width = 8, height = 8)
 
+tmp <- dat_week_CV %>% 
+  filter(clim_var %in% c("Te", "RH_pred")) %>% 
+  pivot_wider(names_from = clim_var, values_from = CV) %>% 
+  left_join(y = dat_week_rho)
+
+pl <- ggplot(data = tmp, mapping = aes(x = Te, y = RH_pred, color = rho, label = loc)) + 
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") + 
+  geom_point() + 
+  geom_text_repel(max.overlaps = Inf) + 
+  facet_wrap(~ country, ncol = 2) + 
+  scale_color_scico(palette = "vik", midpoint = 0, direction = 1) + 
+  theme_bw() + 
+  theme(legend.position = "top", 
+        panel.grid.minor = element_blank()) + 
+  labs(x = "CV(Te)", y = "CV(RH)", color = "cor(Te, RH)")
+print(pl)
+ggsave(filename = "_figures/CV_rho_RH_Te.pdf", plot = pl, width = 12, height = 10)
+
 
 #######################################################################################################
 # END

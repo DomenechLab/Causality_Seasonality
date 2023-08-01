@@ -37,18 +37,19 @@ parms <- c("mu" = 1 / 80 / 52, # Birth rate
 
 e_Te <- parms["e_Te"]
 e_RH <- parms["e_RH"]
-loc_nm <- "Rostock"
+loc_nm <- "SKBO"
 if(save_plot) pdf(file = sprintf("_saved/vignette-descendant-bias-%s.pdf", loc_nm), width = 8, height = 8)
 
 clim_dat <- CreateClimData(loc_nm = loc_nm, n_years = 10)
 
 # Calculate seasonal term of transmission rate
 clim_dat <- clim_dat %>% 
-  mutate(beta_seas = exp(e_Te * (Te_norm - 1)) * exp(e_RH * (RH_pred_norm - 1)))
+  mutate(beta_seas = exp(e_Te * (Te_norm - 1)) * exp(e_RH * (RH_pred_norm - 1))) %>% 
+  select(loc, week_date, week_no, week, everything())
 
 # Data in long format
 clim_dat_long <- clim_dat %>% 
-  pivot_longer(cols = Te:RH_pred_norm, names_to = "var", values_to = "value")
+  pivot_longer(cols = -c(loc, week_date, week_no, week), names_to = "var", values_to = "value")
 
 # Plot time series of climatic variables
 pl <- ggplot(data = clim_dat_long %>% filter(var %in% c("Te", "Td", "RH", "RH_pred")), 
@@ -293,54 +294,36 @@ pl <- ggplot(data = clim_dat_long %>% filter(var %in% c("Te_norm", "RH_pred_norm
   labs(x = "Week no", y = "Renormalized value", color = "")
 print(pl)
 
-# Individual plots of Te and RH
+# Individual plots of Te, RH, and beta_seas
 tmp <- clim_dat_long %>% 
-  filter(var %in% c("Te_norm", "RH_pred_norm"), week_no >= 1) %>% 
-  mutate(var = factor(var, levels = c("Te_norm", "RH_pred_norm"), labels = c("Temperature", "Relative humidity")))
-pl_clim <- ggplot(data = tmp, 
+  filter(var %in% c("Te_norm", "RH_pred_norm", "beta_seas"), week_no >= 1) %>% 
+  mutate(var = factor(var, 
+                      levels = c("Te_norm", "RH_pred_norm", "beta_seas"), 
+                      labels = c("Temperature", "Relative humidity", "Transmission rate")))
+
+pl_left <- ggplot(data = tmp, 
                        mapping = aes(x = week_no, 
                                      y = value)) + 
   geom_line() + 
   geom_vline(xintercept = 52 * (0:10) + 1, color = "grey", alpha = 0.5) + 
-  facet_wrap(~ var, ncol = 1, scales = "fixed") + 
+  facet_wrap(~ var, ncol = 1, scales = "free_y") + 
   theme_classic() +
   theme(strip.background = element_blank(), 
-        strip.text = element_text(colour = "black", size = rel(1.2)), 
+        #strip.text = element_text(colour = "black", size = rel(1.2)), 
         panel.spacing = unit(1, "cm")) + 
   labs(x = "Time (weeks)", y = "Renormalized value")
-print(pl_clim)
-
-# Plot of beta_seas
-pl_beta <- ggplot(data = clim_dat, 
-             mapping = aes(x = week_no, y = beta_seas)) + 
-  geom_line() + 
-  theme_classic() + 
-  theme(plot.title = element_text(hjust = 0.5)) + 
-  labs(x = "Time (weeks)", y = "Value", title = "Seasonal transmission rate")
-print(pl_beta)
+print(pl_left)
 
 # Plot of CC and S
 tmp <- sim_long %>% 
   filter(1 / alpha == 52, state_var %in% c("S", "CC")) %>% 
-  mutate(state_var = factor(state_var, levels = c("CC", "S"), labels = c("Incidence rate", "Susceptible prevalence")), 
+  mutate(state_var = factor(state_var, levels = c("CC", "S"), 
+                            labels = c("Incidence rate (% per week)", "Susceptible prevalence (%)")), 
          R0 = factor(R0))
 levels(tmp$R0) <- paste0("R0 = ", levels(tmp$R0))
 
-pl_CC <- ggplot(data = tmp, 
-             mapping = aes(x = week_no, y = 1e2 * value / N, color = R0)) + 
-  geom_line(linewidth = 0.5, alpha = 0.5) + 
-  scale_color_viridis(discrete = T, option = "rocket", direction = -1, end = 0.75) +
-  facet_wrap(~ state_var, scales = "free_y", ncol = 1) + 
-  scale_y_sqrt() + 
-  theme_classic() + 
-  theme(strip.background = element_blank(), 
-        strip.text = element_text(colour = "black", size = rel(1.2)),
-        legend.position = "top", 
-        panel.spacing = unit(1, "cm")) + 
-  labs(x = "Time (weeks)", y = "Percentage", color = expression(R[0]))
-print(pl_CC)
 
-pl_CC_2 <- ggplot(data = tmp, 
+pl_right <- ggplot(data = tmp, 
                 mapping = aes(x = week_no, y = 1e2 * value / N, color = R0, linetype = state_var)) + 
   geom_line(linewidth = 0.5) + 
   facet_wrap(~factor(R0), scales = "free_y", ncol = 1) + 
@@ -353,21 +336,20 @@ pl_CC_2 <- ggplot(data = tmp,
         legend.position = "top", 
         panel.spacing = unit(1, "cm")) + 
   guides(color = "none") + 
-  labs(x = "Time (weeks)", y = "Percentage", color = expression(R[0]), linetype = "Variable")
-print(pl_CC_2)
+  labs(x = "Time (weeks)", y = "Value", color = expression(R[0]), linetype = "")
+print(pl_right)
 
 # Assemble plot
-layout_plot <- "
-A#C
-ABC
-A#C
-"
 
-pl_all <- pl_clim + pl_beta + pl_CC_2 + 
-  plot_layout(design = layout_plot)
+pl_all <- pl_left + pl_right + 
+  plot_annotation(tag_levels = "A") & 
+  theme(plot.tag = element_text(size = 10))
 print(pl_all)
 
-ggsave(plot = pl_all, filename = "_figures/_main/vignette-descendant-bias-m1.pdf", width = 12, height = 8)
+ggsave(plot = pl_all, 
+       filename = sprintf("_figures/_main/vignette-descendant-bias-main-%s.pdf", loc_nm), 
+       width = 10, 
+       height = 8)
 
 # End statements ----------------------------------------------------------
 if(save_plot) dev.off()
