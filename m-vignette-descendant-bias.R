@@ -15,7 +15,7 @@ source("s-base_packages.R")
 library("mgcv")
 library("pomp")
 theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
-save_plot <- F # Should all the plots be saved as a pdf? 
+save_plot <- T # Should all the plots be saved as a pdf? 
 
 # Set model parameters ----------------------------------------------------
 parms <- c("mu" = 1 / 80 / 52, # Birth rate 
@@ -37,7 +37,7 @@ parms <- c("mu" = 1 / 80 / 52, # Birth rate
 
 e_Te <- parms["e_Te"]
 e_RH <- parms["e_RH"]
-loc_nm <- "SKBO"
+loc_nm <- "Rostock"
 if(save_plot) pdf(file = sprintf("_saved/vignette-descendant-bias-%s.pdf", loc_nm), width = 8, height = 8)
 
 clim_dat <- CreateClimData(loc_nm = loc_nm, n_years = 10)
@@ -171,7 +171,7 @@ for(s in svars_plot) {
   } else {
     pl <- pl + labs(x = "Year", y = "Proportion", title = s)
   }
-    
+  
   print(pl)
 }
 
@@ -207,11 +207,18 @@ f_reg <- function(df) {
   M_est_se <- summary(M_nb)$se
   R2 <- summary(M_nb)$r.sq
   
+  # Correlation between smooth(time) and log(S*I)
+  s_time <- predict(object = M_nb, type = "terms")
+  s_time <- s_time[, "s(week_no)"]
+  log_SI <- log(df$S * df$I)
+  rho <- cor(x = s_time, y = log_SI, method = "pearson")
+  
   # Return
   out <- data.frame(e_Te = M_est["Te_norm_lag"], 
                     e_Te_se = M_est_se["Te_norm_lag"], 
                     e_RH = M_est["RH_pred_norm_lag"], 
-                    e_RH_se = M_est_se["RH_pred_norm_lag"], 
+                    e_RH_se = M_est_se["RH_pred_norm_lag"],
+                    rho_sTime_logSI = rho,
                     R2 = R2)
   
   return(out)
@@ -234,7 +241,7 @@ sim_reg_long <- sim_reg %>%
 
 # Plots -------------------------------------------------------------------
 # Plot point estimates
-svars_plot <- c("e_Te", "e_RH", "R2")
+svars_plot <- c("e_Te", "e_RH", "R2", "rho_sTime_logSI")
 for(s in svars_plot) {
   pl <- ggplot(data = sim_reg_long %>% filter(name == s), 
                mapping = aes(x = factor(round(alpha, 2)), y = value)) + 
@@ -263,18 +270,46 @@ for(s in svars_plot) {
   print(pl)
 }
 
+# Correlation between s(time) and R2
+pl <- ggplot(data = sim_reg, 
+             mapping = aes(x = R2, y = rho_sTime_logSI, 
+                           color = abs(e_Te - parms["e_Te"]) + abs(e_RH - parms["e_RH"]))) + 
+  geom_point(alpha = 0.5) + 
+  scale_color_viridis(option = "rocket", direction = -1) + 
+  theme(legend.position = "top") + 
+  labs(x = "R2", y = "rho(sTime, log_SI)", color = "B(Te) + B(RH)", 
+       title = "Association between smooth(time) and R2")
+print(pl)
+
+pl <- ggplot(data = sim_reg, 
+             mapping = aes(x = R2, y = abs(e_Te - parms["e_Te"]) + abs(e_RH - parms["e_RH"]))) + 
+  geom_point(color = "grey", alpha = 1) + 
+  theme_classic() + 
+  labs(x = "R2", y = "B(Te) + B(RH)", title = "Total absolute bias vs. R2")
+print(pl)
+
+pl <- ggplot(data = sim_reg, 
+             mapping = aes(x = rho_sTime_logSI, y = abs(e_Te - parms["e_Te"]) + abs(e_RH - parms["e_RH"]))) + 
+  geom_point(color = "grey", alpha = 1) + 
+  theme_classic() + 
+  labs(x = "rho(sTime, log_SI)", y = "B(Te) + B(RH)", title = "Total absolute bias vs. rho(sTime, log_SI)")
+print(pl)
+
 # Estimation performance --------------------------------------------------
 est_perf <- sim_reg %>% 
   group_by(.id, eps, R0, alpha) %>% 
   summarise(e_Te_bias_mean = mean(abs(e_Te - parms["e_Te"])),
-            e_Te_bias_min = min(abs(e_Te - parms["e_Te"])), 
-            e_Te_bias_max = max(abs(e_Te - parms["e_Te"])),
+            e_Te_bias_sd = sd(abs(e_Te - parms["e_Te"])), 
+            e_Te_se_mean = mean(e_Te_se), 
+            e_Te_se_sd = sd(e_Te_se), 
             e_Te_pow = mean(e_Te + 1.96 * e_Te_se < 0), 
             e_RH_bias_mean = mean(abs(e_RH - parms["e_RH"])),
-            e_RH_bias_min = min(abs(e_RH - parms["e_RH"])), 
-            e_RH_bias_max = max(abs(e_RH - parms["e_RH"])),
+            e_RH_bias_sd = sd(abs(e_RH - parms["e_RH"])), 
+            e_RH_se_mean = mean(e_RH_se), 
+            e_RH_se_sd = sd(e_RH_se), 
             e_RH_pow = mean(e_RH + 1.96 * e_RH_se < 0), 
-            R2_mean = mean(R2)) %>% 
+            R2_mean = mean(R2), 
+            R2_sd = sd(R2)) %>% 
   ungroup() %>% 
   arrange(alpha, R0)
 
@@ -302,8 +337,8 @@ tmp <- clim_dat_long %>%
                       labels = c("Temperature", "Relative humidity", "Transmission rate")))
 
 pl_left <- ggplot(data = tmp, 
-                       mapping = aes(x = week_no, 
-                                     y = value)) + 
+                  mapping = aes(x = week_no, 
+                                y = value)) + 
   geom_line() + 
   geom_vline(xintercept = 52 * (0:10) + 1, color = "grey", alpha = 0.5) + 
   facet_wrap(~ var, ncol = 1, scales = "free_y") + 
@@ -324,7 +359,7 @@ levels(tmp$R0) <- paste0("R0 = ", levels(tmp$R0))
 
 
 pl_right <- ggplot(data = tmp, 
-                mapping = aes(x = week_no, y = 1e2 * value / N, color = R0, linetype = state_var)) + 
+                   mapping = aes(x = week_no, y = 1e2 * value / N, color = R0, linetype = state_var)) + 
   geom_line(linewidth = 0.5) + 
   facet_wrap(~factor(R0), scales = "free_y", ncol = 1) + 
   scale_y_sqrt() + 
