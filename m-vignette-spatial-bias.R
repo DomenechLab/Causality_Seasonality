@@ -45,7 +45,7 @@ parms <- c("mu" = 1 / 80 / 52, # Birth rate
            "rho_k" = 0.04) # Reporting over-dispersion
 
 # Load names of the locations ----------------------------------------------------------------------
-country_name <- "Spain"
+country_name <- "Colombia"
 names_l <- unique(filter(readRDS("_data/clim_data.rds"), country == country_name)$loc)
 names_l <- str_subset(names_l, "GCLP|Villavicencio|Cartagena|Armenia", negate = T)
 
@@ -262,7 +262,7 @@ pl_ss4 <- ggplot() +
 # Plot it! -----------------------------------------------------------------------------------------
 
 pl_sim_sncf <- ((sncf_sim_l$id4$plot[[1]] | sncf_sim_l$id4$plot[[2]]) + plot_layout(widths = c(3,1))) / (pl_ss1 | pl_ss2 | pl_ss3 | pl_ss4) 
-pl_sim_sncf
+pl_sim_sncf <- sncf_sim_l$id4$plot[[1]] / (sncf_sim_l$id4$plot[[2]] | pl_ss3 | pl_ss4 )
 
 ggsave(pl_sim_sncf, file = glue("_figures/{country_name}_sncfsimulations.pdf"), 
        height = 9, width = 15)
@@ -270,4 +270,6 @@ ggsave(pl_sim_sncf, file = glue("_figures/{country_name}_sncfsimulations.pdf"),
 ####################################################################################################
 # END
 ####################################################################################################
+
+
 

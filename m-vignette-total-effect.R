@@ -42,8 +42,9 @@ parms <- c("mu" = 1 / 80 / 52, # Birth rate
 # Rostock (Germany): Rostock
 loc_nm <- "Rostock" ## Choose here the location!
 
+if(loc_nm == "SKPS") loc_tidy_nm <- "Pasto"
 if(loc_nm == "SKBO") loc_tidy_nm <- "Bogotá"
-if(loc_nm == "Rostock") loc_tidy_nm <- "Rostock"
+if(loc_nm == "Rostock") loc_tidy_nm <- "Lübbeck"
 
 clim_dat <- CreateClimData(loc_nm = loc_nm, n_years = 10) 
 
@@ -59,7 +60,7 @@ clim_dat_long <- clim_dat %>%
   pivot_longer(cols = Te:RH_pred_norm_miss, names_to = "var", values_to = "value")
 
 # Plot time series of climatic variables
-fun_PlotClimData(loc_nm, clim_data_list = F, country = "Germany")
+fun_PlotClimData(loc_nm, clim_data_list = F, country = "Colombia")
 
 # Add lagged variables for Te_norm and RH_norm
 # clim_dat <- clim_dat %>% 
@@ -129,7 +130,8 @@ sim_long <- sim %>%
   filter(te_rh != "Te = 0, RH = 0") %>% 
   mutate(beta_seas = exp(e_Te * (Te_norm - 1)) * exp(e_RH * (RH_pred_norm - 1))) 
 
-# Plot simulations
+# Plot simulations ---------------------------------------------------------------------------------
+if(loc_nm == "SKPS") col <- c("#8CD1BB", "#407967")
 if(loc_nm == "SKBO") col <- c("#8CD1BB", "#407967")
 if(loc_nm == "Rostock") col <- c("pink", "firebrick2")
 
@@ -141,8 +143,48 @@ sim_long %>%
   scale_color_manual("Effect of temperature", values = col) + 
   theme(legend.position = "top")
 
+saveRDS(sim_long, glue("_saved/sim_te_effect_{loc_tidy_nm}.rds"))
+
 # Plot effect of temperature -----------------------------------------------------------------------
-pl1 <- sim_long %>%
+
+sim_long <- readRDS(glue("_saved/sim_te_effect_Pasto.rds")) %>%
+  bind_rows(readRDS(glue("_saved/sim_te_effect_Lübbeck.rds")), .id = "loc_tidy_nm") %>%
+  mutate(loc_tidy_nm = case_when(loc_tidy_nm == 1 ~ "Pasto",
+                                 loc_tidy_nm == 2 ~ "Lübbeck"))
+
+# Main figure
+pl1a <- sim_long %>%
+  filter(R0 == 1.25) %>% 
+  ggplot(aes(x = week_no, y = beta_seas, color = Te_effect, group = Te_effect)) + 
+  geom_line() + 
+  scale_x_continuous("Time (weeks)") + 
+  scale_y_continuous("Transmission rate") + 
+  scale_color_manual("Effect of temperature", values = col) +
+  facet_wrap(loc_tidy_nm~., scales = "free", ncol = 1) + 
+  theme(legend.position = "top",
+        legend.direction = "vertical",
+        legend.justification = "left",
+        strip.background = element_blank())
+
+pl1b <- sim_long %>%
+  filter(R0 == 1.25) %>% 
+  mutate(loc_te = glue("{loc_tidy_nm}: {Te_effect}")) %>%
+  ggplot(aes(x = Te, y = beta_seas, color = Te_effect, group = Te_effect)) + 
+  geom_point() + 
+  scale_x_continuous("Temperature (°C)") + 
+  scale_y_continuous("Transmission rate") + 
+  facet_wrap(loc_te~., scales = "free") + 
+  scale_color_manual("Effect of temperature", values = col) + 
+  geom_smooth(color = "grey") + 
+  theme(legend.position = "none",
+        strip.background = element_blank())
+
+pl1 <- pl1a + pl1b
+
+ggsave(pl1, file = glue("_figures/vignette-total-effect.pdf"), 
+       height = 6, width = 12)
+
+pls1a <- sim_long %>%
   filter(state_var == "CC") %>%
   filter(R0 == 1.25) %>%
   ggplot(aes(x = week_no, y = value / N * 100, color = Te_effect, group = Te_effect)) + 
@@ -150,61 +192,34 @@ pl1 <- sim_long %>%
   scale_x_continuous("Time (weeks)") + 
   scale_y_continuous("Total cases (per week per 100)") + 
   scale_color_manual("Effect of temperature", values = col) + 
+  facet_grid(loc_tidy_nm~., scales = "free") + 
   theme(strip.background = element_blank(),
-        legend.position = "none")
-
-pl2 <- sim_long %>%
-  filter(R0 == 1.25) %>% 
-  ggplot(aes(x = week_no, y = beta_seas, color = Te_effect, group = Te_effect)) + 
-  geom_line() + 
-  scale_x_continuous("Time (weeks)") + 
-  scale_y_continuous("Transmission rate") + 
-  scale_color_manual("Effect of temperature", values = col) +
-  facet_grid(~glue("{loc_tidy_nm}")) + 
-  theme(legend.position = "top",
+        legend.position = "top",
         legend.direction = "vertical",
-        strip.background = element_blank())
+        legend.justification = "left")
 
-pl3 <- sim_long %>%
+
+pls2a <- sim_long %>%
   filter(state_var == "CC") %>%
   filter(R0 == 1.25) %>% 
-  #  mutate(Te_cut = cut(Te, breaks = 20, labels = FALSE),
-  #        Te_cut_lab = cut(Te, breaks = 20)) %>%
-  # group_by(.id, Te_effect, Te_cut, Te_cut_lab) %>%
-  # summarise(Te = mean(Te),
-  #           CC_min = min(value/N*100),
-  #           CC_max = max(value/N*100),
-  #           CC = mean(value/N*100)) %>%
+  mutate(loc_te = glue("{loc_tidy_nm}: {Te_effect}")) %>%
   ggplot(aes(x = Te, y = value/N*100, color = Te_effect, group = Te_effect)) + 
   geom_point() + 
-  #geom_linerange(aes(ymin = CC_min, ymax = CC_max)) + 
-  scale_x_continuous("Temperature") + 
+  scale_x_continuous("Temperature (°C)") + 
   scale_y_continuous("Total cases (per week per 100)") + 
-  facet_wrap(~Te_effect, scales = "free") + 
+  facet_wrap(loc_te~., scales = "free") + 
   scale_color_manual("Effect of temperature", values = col) + 
   geom_smooth(color = "grey") + 
   theme(legend.position = "none",
         strip.background = element_blank())
 
-pl4 <- sim_long %>%
-  filter(R0 == 1.25) %>% 
-  mutate(Te_cut = cut(Te, breaks = 10, labels = FALSE),
-         Te_cut_lab = cut(Te, breaks = 10)) %>%
-  ggplot(aes(x = Te, y = beta_seas, color = Te_effect, group = Te_effect)) + 
-  geom_point() + 
-  scale_x_continuous("Temperature") + 
-  scale_y_continuous("Transmission rate") + 
-  facet_wrap(~Te_effect, scales = "free") + 
-  scale_color_manual("Effect of temperature", values = col) + 
-  geom_smooth(color = "grey") + 
-  theme(legend.position = "none",
-        strip.background = element_blank())
+pls1 <- pls1a + pls2a
 
-pl_tot <- (pl2 + pl4) / (pl1 + pl3) 
-pl_tot
+ggsave(pls1, file = glue("_figures/supplements_vignette-total-effect.pdf"), 
+       height = 6, width = 12)
 
-ggsave(pl_tot, file = glue("_figures/vignette-total-effect-{loc_tidy_nm}.pdf"), 
-       height = 7, width = 12)
-
+####################################################################################################
+# END
+####################################################################################################
 
 
