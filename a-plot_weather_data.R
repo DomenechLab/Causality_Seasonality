@@ -98,7 +98,7 @@ pl <- ggplot(data = dat_wide %>% filter(year_no == max(year_no), Te < Inf),
   labs(color = "Te")
 print(pl)
 
-ggsave(filename = "_figures/RH.pdf", width = 8, height = 8)
+ggsave(filename = "_figures/_other/RH.pdf", width = 8, height = 8)
 
 vars_nm <- c("Te", "Td", "RH")
 
@@ -117,7 +117,7 @@ for(var_nm in vars_nm) {
       labs(x = "Day", y = "Value", title = sprintf("Country: %s, climatic variable: %s", ct_nm, var_nm))
     print(pl)
     
-    ggsave(filename = sprintf("_figures/%s-%s.pdf", ct_nm, var_nm), plot = pl, width = 12, height = 8)
+    ggsave(filename = sprintf("_figures/_other/%s-%s.pdf", ct_nm, var_nm), plot = pl, width = 12, height = 8)
   }
 }
 
@@ -150,7 +150,7 @@ pl <- ggplot(data = dat_week_CV %>% filter(country %in% countries_nm, clim_var %
   labs(x = "Country", y = "Coefficient of variation")
 print(pl)
 
-ggsave(filename = "_figures/CV_RH_Te.pdf", width = 10, height = 10)
+ggsave(filename = "_figures/_other/CV_RH_Te.pdf", width = 10, height = 10)
 
 # Plot
 dat_week_rho <- dat_week %>% 
@@ -166,7 +166,25 @@ pl <- ggplot(data = dat_week_rho %>% filter(country %in% countries_nm),
   geom_text_repel(max.overlaps = Inf) + 
   labs(x = "Country", y = "rho(Te, RH)")
 print(pl)
-ggsave(filename = "_figures/rho_RH_Te.pdf", width = 8, height = 8)
+ggsave(filename = "_figures/_other/rho_RH_Te.pdf", width = 8, height = 8)
+
+tmp <- dat_week_CV %>% 
+  filter(clim_var %in% c("Te", "RH_pred")) %>% 
+  pivot_wider(names_from = clim_var, values_from = CV) %>% 
+  left_join(y = dat_week_rho)
+
+pl <- ggplot(data = tmp, mapping = aes(x = Te, y = RH_pred, color = rho, label = loc)) + 
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") + 
+  geom_point() + 
+  geom_text_repel(max.overlaps = Inf) + 
+  facet_wrap(~ country, ncol = 2) + 
+  scale_color_scico(palette = "vik", midpoint = 0, direction = 1) + 
+  theme_bw() + 
+  theme(legend.position = "top", 
+        panel.grid.minor = element_blank()) + 
+  labs(x = "CV(Te)", y = "CV(RH)", color = "cor(Te, RH)")
+print(pl)
+ggsave(filename = "_figures/_other/CV_rho_RH_Te.pdf", plot = pl, width = 12, height = 10)
 
 
 #######################################################################################################

@@ -24,12 +24,12 @@ library("corrplot")
 
 theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
 par(bty = "l", las = 1, lwd = 2)
-save_plot <- F # Should all the plots be saved as a pdf? 
+save_plot <- T # Should all the plots be saved as a pdf? 
 
 # Set model parameters ----------------------------------------------------
 parms <- c("mu" = 1 / 80 / 52, # Birth rate 
            "N" = 5e6, # Total population size
-           "R0" = 1.25, # Basic reproduction no
+           "R0" = 2.5, # Basic reproduction no
            "sigma_beta" = 0.02, # SD of environmental noise (set to 0 for a deterministic process model)
            "e_Te" = -0.2, # Effect of Te on transmission 
            "e_RH" = -0.2, # Effect of RH on transmission
@@ -41,10 +41,11 @@ parms <- c("mu" = 1 / 80 / 52, # Birth rate
 # Load climatic data in a given location------------------------------------------------------
 # Bogota (Colombia): weather station "SKBO", rho(Te, RH) = -0.08, CV(RH) = 0.07
 # Rostock (Germany): Rostock, rho(Te, RH) = -0.69, CV(RH) = 0.085
+# Pasto (Colombia): "SKPS", rho(Te, RH) = -91, CV(RH) = 0.019
 
 e_Te <- parms["e_Te"]
 e_RH <- parms["e_RH"]
-loc_nm <- "Rostock"
+loc_nm <- "SKBO"
 if(save_plot) pdf(file = sprintf("_saved/vignette-quasi-experiments-%s.pdf", loc_nm), width = 8, height = 8)
 
 clim_dat <- CreateClimData(loc_nm = loc_nm, n_years = 10)

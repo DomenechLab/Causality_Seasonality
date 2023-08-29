@@ -15,7 +15,7 @@ source("s-base_packages.R")
 library("mgcv")
 library("pomp")
 theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
-save_plot <- F # Should all the plots be saved as a pdf? 
+save_plot <- T # Should all the plots be saved as a pdf? 
 
 # Set model parameters ----------------------------------------------------
 parms <- c("mu" = 1 / 80 / 52, # Birth rate 
@@ -44,11 +44,12 @@ clim_dat <- CreateClimData(loc_nm = loc_nm, n_years = 10)
 
 # Calculate seasonal term of transmission rate
 clim_dat <- clim_dat %>% 
-  mutate(beta_seas = exp(e_Te * (Te_norm - 1)) * exp(e_RH * (RH_pred_norm - 1)))
+  mutate(beta_seas = exp(e_Te * (Te_norm - 1)) * exp(e_RH * (RH_pred_norm - 1))) %>% 
+  select(loc, week_date, week_no, week, everything())
 
 # Data in long format
 clim_dat_long <- clim_dat %>% 
-  pivot_longer(cols = Te:RH_pred_norm, names_to = "var", values_to = "value")
+  pivot_longer(cols = -c(loc, week_date, week_no, week), names_to = "var", values_to = "value")
 
 # Plot time series of climatic variables
 pl <- ggplot(data = clim_dat_long %>% filter(var %in% c("Te", "Td", "RH", "RH_pred")), 
@@ -170,7 +171,7 @@ for(s in svars_plot) {
   } else {
     pl <- pl + labs(x = "Year", y = "Proportion", title = s)
   }
-    
+  
   print(pl)
 }
 
@@ -206,11 +207,18 @@ f_reg <- function(df) {
   M_est_se <- summary(M_nb)$se
   R2 <- summary(M_nb)$r.sq
   
+  # Correlation between smooth(time) and log(S*I)
+  s_time <- predict(object = M_nb, type = "terms")
+  s_time <- s_time[, "s(week_no)"]
+  log_SI <- log(df$S * df$I)
+  rho <- cor(x = s_time, y = log_SI, method = "pearson")
+  
   # Return
   out <- data.frame(e_Te = M_est["Te_norm_lag"], 
                     e_Te_se = M_est_se["Te_norm_lag"], 
                     e_RH = M_est["RH_pred_norm_lag"], 
-                    e_RH_se = M_est_se["RH_pred_norm_lag"], 
+                    e_RH_se = M_est_se["RH_pred_norm_lag"],
+                    rho_sTime_logSI = rho,
                     R2 = R2)
   
   return(out)
@@ -233,7 +241,7 @@ sim_reg_long <- sim_reg %>%
 
 # Plots -------------------------------------------------------------------
 # Plot point estimates
-svars_plot <- c("e_Te", "e_RH", "R2")
+svars_plot <- c("e_Te", "e_RH", "R2", "rho_sTime_logSI")
 for(s in svars_plot) {
   pl <- ggplot(data = sim_reg_long %>% filter(name == s), 
                mapping = aes(x = factor(round(alpha, 2)), y = value)) + 
@@ -262,18 +270,46 @@ for(s in svars_plot) {
   print(pl)
 }
 
+# Correlation between s(time) and R2
+pl <- ggplot(data = sim_reg, 
+             mapping = aes(x = R2, y = rho_sTime_logSI, 
+                           color = abs(e_Te - parms["e_Te"]) + abs(e_RH - parms["e_RH"]))) + 
+  geom_point(alpha = 0.5) + 
+  scale_color_viridis(option = "rocket", direction = -1) + 
+  theme(legend.position = "top") + 
+  labs(x = "R2", y = "rho(sTime, log_SI)", color = "B(Te) + B(RH)", 
+       title = "Association between smooth(time) and R2")
+print(pl)
+
+pl <- ggplot(data = sim_reg, 
+             mapping = aes(x = R2, y = abs(e_Te - parms["e_Te"]) + abs(e_RH - parms["e_RH"]))) + 
+  geom_point(color = "grey", alpha = 1) + 
+  theme_classic() + 
+  labs(x = "R2", y = "B(Te) + B(RH)", title = "Total absolute bias vs. R2")
+print(pl)
+
+pl <- ggplot(data = sim_reg, 
+             mapping = aes(x = rho_sTime_logSI, y = abs(e_Te - parms["e_Te"]) + abs(e_RH - parms["e_RH"]))) + 
+  geom_point(color = "grey", alpha = 1) + 
+  theme_classic() + 
+  labs(x = "rho(sTime, log_SI)", y = "B(Te) + B(RH)", title = "Total absolute bias vs. rho(sTime, log_SI)")
+print(pl)
+
 # Estimation performance --------------------------------------------------
 est_perf <- sim_reg %>% 
   group_by(.id, eps, R0, alpha) %>% 
   summarise(e_Te_bias_mean = mean(abs(e_Te - parms["e_Te"])),
-            e_Te_bias_min = min(abs(e_Te - parms["e_Te"])), 
-            e_Te_bias_max = max(abs(e_Te - parms["e_Te"])),
+            e_Te_bias_sd = sd(abs(e_Te - parms["e_Te"])), 
+            e_Te_se_mean = mean(e_Te_se), 
+            e_Te_se_sd = sd(e_Te_se), 
             e_Te_pow = mean(e_Te + 1.96 * e_Te_se < 0), 
             e_RH_bias_mean = mean(abs(e_RH - parms["e_RH"])),
-            e_RH_bias_min = min(abs(e_RH - parms["e_RH"])), 
-            e_RH_bias_max = max(abs(e_RH - parms["e_RH"])),
+            e_RH_bias_sd = sd(abs(e_RH - parms["e_RH"])), 
+            e_RH_se_mean = mean(e_RH_se), 
+            e_RH_se_sd = sd(e_RH_se), 
             e_RH_pow = mean(e_RH + 1.96 * e_RH_se < 0), 
-            R2_mean = mean(R2)) %>% 
+            R2_mean = mean(R2), 
+            R2_sd = sd(R2)) %>% 
   ungroup() %>% 
   arrange(alpha, R0)
 
@@ -293,55 +329,37 @@ pl <- ggplot(data = clim_dat_long %>% filter(var %in% c("Te_norm", "RH_pred_norm
   labs(x = "Week no", y = "Renormalized value", color = "")
 print(pl)
 
-# Individual plots of Te and RH
+# Individual plots of Te, RH, and beta_seas
 tmp <- clim_dat_long %>% 
-  filter(var %in% c("Te_norm", "RH_pred_norm"), week_no >= 1) %>% 
-  mutate(var = factor(var, levels = c("Te_norm", "RH_pred_norm"), labels = c("Temperature", "Relative humidity")))
-pl_clim <- ggplot(data = tmp, 
-                       mapping = aes(x = week_no, 
-                                     y = value)) + 
+  filter(var %in% c("Te_norm", "RH_pred_norm", "beta_seas"), week_no >= 1) %>% 
+  mutate(var = factor(var, 
+                      levels = c("Te_norm", "RH_pred_norm", "beta_seas"), 
+                      labels = c("Temperature", "Relative humidity", "Transmission rate")))
+
+pl_left <- ggplot(data = tmp, 
+                  mapping = aes(x = week_no, 
+                                y = value)) + 
   geom_line() + 
   geom_vline(xintercept = 52 * (0:10) + 1, color = "grey", alpha = 0.5) + 
-  facet_wrap(~ var, ncol = 1, scales = "fixed") + 
+  facet_wrap(~ var, ncol = 1, scales = "free_y") + 
   theme_classic() +
   theme(strip.background = element_blank(), 
-        strip.text = element_text(colour = "black", size = rel(1.2)), 
+        #strip.text = element_text(colour = "black", size = rel(1.2)), 
         panel.spacing = unit(1, "cm")) + 
   labs(x = "Time (weeks)", y = "Renormalized value")
-print(pl_clim)
-
-# Plot of beta_seas
-pl_beta <- ggplot(data = clim_dat, 
-             mapping = aes(x = week_no, y = beta_seas)) + 
-  geom_line() + 
-  theme_classic() + 
-  theme(plot.title = element_text(hjust = 0.5)) + 
-  labs(x = "Time (weeks)", y = "Value", title = "Seasonal transmission rate")
-print(pl_beta)
+print(pl_left)
 
 # Plot of CC and S
 tmp <- sim_long %>% 
   filter(1 / alpha == 52, state_var %in% c("S", "CC")) %>% 
-  mutate(state_var = factor(state_var, levels = c("CC", "S"), labels = c("Incidence rate", "Susceptible prevalence")), 
+  mutate(state_var = factor(state_var, levels = c("CC", "S"), 
+                            labels = c("Incidence rate (% per week)", "Susceptible prevalence (%)")), 
          R0 = factor(R0))
 levels(tmp$R0) <- paste0("R0 = ", levels(tmp$R0))
 
-pl_CC <- ggplot(data = tmp, 
-             mapping = aes(x = week_no, y = 1e2 * value / N, color = R0)) + 
-  geom_line(linewidth = 0.5, alpha = 0.5) + 
-  scale_color_viridis(discrete = T, option = "rocket", direction = -1, end = 0.75) +
-  facet_wrap(~ state_var, scales = "free_y", ncol = 1) + 
-  scale_y_sqrt() + 
-  theme_classic() + 
-  theme(strip.background = element_blank(), 
-        strip.text = element_text(colour = "black", size = rel(1.2)),
-        legend.position = "top", 
-        panel.spacing = unit(1, "cm")) + 
-  labs(x = "Time (weeks)", y = "Percentage", color = expression(R[0]))
-print(pl_CC)
 
-pl_CC_2 <- ggplot(data = tmp, 
-                mapping = aes(x = week_no, y = 1e2 * value / N, color = R0, linetype = state_var)) + 
+pl_right <- ggplot(data = tmp, 
+                   mapping = aes(x = week_no, y = 1e2 * value / N, color = R0, linetype = state_var)) + 
   geom_line(linewidth = 0.5) + 
   facet_wrap(~factor(R0), scales = "free_y", ncol = 1) + 
   scale_y_sqrt() + 
@@ -353,21 +371,20 @@ pl_CC_2 <- ggplot(data = tmp,
         legend.position = "top", 
         panel.spacing = unit(1, "cm")) + 
   guides(color = "none") + 
-  labs(x = "Time (weeks)", y = "Percentage", color = expression(R[0]), linetype = "Variable")
-print(pl_CC_2)
+  labs(x = "Time (weeks)", y = "Value", color = expression(R[0]), linetype = "")
+print(pl_right)
 
 # Assemble plot
-layout_plot <- "
-A#C
-ABC
-A#C
-"
 
-pl_all <- pl_clim + pl_beta + pl_CC_2 + 
-  plot_layout(design = layout_plot)
+pl_all <- pl_left + pl_right + 
+  plot_annotation(tag_levels = "A") & 
+  theme(plot.tag = element_text(size = 10))
 print(pl_all)
 
-ggsave(plot = pl_all, filename = "_figures/_main/vignette-descendant-bias-m1.pdf", width = 12, height = 8)
+ggsave(plot = pl_all, 
+       filename = sprintf("_figures/_main/vignette-descendant-bias-main-%s.pdf", loc_nm), 
+       width = 10, 
+       height = 8)
 
 # End statements ----------------------------------------------------------
 if(save_plot) dev.off()
