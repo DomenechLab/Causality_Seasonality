@@ -38,7 +38,8 @@ parms <- c("mu" = 1 / 80 / 52, # Birth rate
 e_Te <- parms["e_Te"]
 e_RH <- parms["e_RH"]
 loc_nm <- "Rostock"
-if(save_plot) pdf(file = sprintf("_saved/vignette-descendant-bias-%s.pdf", loc_nm), width = 8, height = 8)
+if(save_plot) pdf(file = sprintf("_saved/_vignette_descendent_bias/vignette-descendant-bias-%s.pdf", loc_nm), 
+                  width = 8, height = 8)
 
 clim_dat <- CreateClimData(loc_nm = loc_nm, n_years = 10)
 
@@ -225,7 +226,7 @@ f_reg <- function(df) {
 }
 
 # Run regressions
-sim_reg <- bake(file = sprintf("_saved/vignette-descendant-bias-regressions-%s.rds", loc_nm), 
+sim_reg <- bake(file = sprintf("_saved/_vignette_descendent_bias/vignette-descendant-bias-regressions-%s.rds", loc_nm), 
                 seed = 2186L, 
                 expr = {
                   sims_all %>% 
@@ -240,15 +241,32 @@ sim_reg_long <- sim_reg %>%
   mutate(R0_fac = R0 %>% factor() %>% fct_relabel(.fun = ~ paste0("R0 = ", .x)))
 
 # Plots -------------------------------------------------------------------
-# Plot point estimates
+# Plot point estimates; x-axis: waning rate, panels: R0
 svars_plot <- c("e_Te", "e_RH", "R2", "rho_sTime_logSI")
 for(s in svars_plot) {
   pl <- ggplot(data = sim_reg_long %>% filter(name == s), 
-               mapping = aes(x = factor(round(alpha, 2)), y = value)) + 
+               mapping = aes(x = factor(1 / alpha / 52), y = value)) + 
     geom_boxplot() + 
     #facet_grid(R0 ~ factor(1 / alpha / 52), scales = "fixed") + 
     facet_wrap(~ R0_fac, scales = "fixed", ncol = 2) + 
-    labs(x = "Waning rate (per week)", y = "Point estimate", title = s)
+    labs(x = "Average duration of immunity (years)", y = "Point estimate", title = s)
+  
+  if(s %in% c("e_Te", "e_RH")) {
+    pl <- pl + 
+      geom_hline(yintercept = coef(PompMod, s), color = "red", linetype = "dashed")
+  } 
+  
+  print(pl)
+}
+
+# Plot point estimates; x-axis: R0, panels: waning rate
+for(s in svars_plot) {
+  pl <- ggplot(data = sim_reg_long %>% filter(name == s), 
+               mapping = aes(x = factor(round(R0, 2)), y = value)) + 
+    geom_boxplot() + 
+    #facet_grid(R0 ~ factor(1 / alpha / 52), scales = "fixed") + 
+    facet_wrap(~ factor(1 / alpha / 52), scales = "fixed", ncol = 2) + 
+    labs(x = "R0", y = "Point estimate", title = s)
   
   if(s %in% c("e_Te", "e_RH")) {
     pl <- pl + 
@@ -262,11 +280,17 @@ for(s in svars_plot) {
 svars_plot <- c("e_Te_se", "e_RH_se")
 for(s in svars_plot) {
   pl <- ggplot(data = sim_reg_long %>% filter(name == s), 
-               mapping = aes(x = factor(round(alpha, 2)), y = value)) + 
+               mapping = aes(x = factor(1 / alpha / 52), y = value)) + 
     geom_boxplot() + 
     facet_wrap(~ R0_fac, scales = "fixed", ncol = 2) + 
-    labs(x = "Waning rate (per week)", y = "Estimate SE", title = s)
+    labs(x = "Average duration of immunity (years)", y = "Estimate SE", title = s)
+  print(pl)
   
+  pl <- ggplot(data = sim_reg_long %>% filter(name == s), 
+               mapping = aes(x = factor(round(R0, 2)), y = value)) + 
+    geom_boxplot() + 
+    facet_wrap(~ factor(1 / alpha / 52), scales = "fixed", ncol = 2) + 
+    labs(x = "R0", y = "Estimate SE", title = s)
   print(pl)
 }
 
@@ -315,6 +339,7 @@ est_perf <- sim_reg %>%
 
 # Make main figures -------------------------------------------------------
 
+# FIGURE 1: Time series of seasonal drivers and model simulations
 # Plot of Te and RH
 pl <- ggplot(data = clim_dat_long %>% filter(var %in% c("Te_norm", "RH_pred_norm")), 
              mapping = aes(x = isoweek(week_date), 
@@ -384,6 +409,47 @@ print(pl_all)
 ggsave(plot = pl_all, 
        filename = sprintf("_figures/_main/vignette-descendant-bias-main-%s.pdf", loc_nm), 
        width = 10, 
+       height = 8)
+
+# FIGURE 2: Parameter estimates from regression ---------------------------------------------------------------
+tmp <- sim_reg %>% 
+  filter(1 / alpha == 52) %>% 
+  rename("Te" = "e_Te", "RH" = "e_RH") %>% 
+  pivot_longer(cols = c("Te", "RH"), names_to = "var", values_to = "est")
+  
+pl <- ggplot(data = sim_reg %>% filter(1 / alpha == 52), 
+             mapping = aes(x = e_Te, y = e_Te_se, color = R2, shape = factor(R0))) + 
+  geom_vline(xintercept = e_Te, linetype = "dotted") + 
+  geom_point() + 
+  #geom_xsidedensity(mapping = aes(y = stat(density))) + 
+  #facet_wrap(~ factor(R0)) + 
+  scale_color_viridis(option = "turbo", direction = -1) +
+  theme_classic() + 
+  theme(legend.position = "top") + 
+  labs(x = "Point estimate of temperature effect", y = "Standard error of estimate", 
+       color = expression(R^2), shape = expression(R[0]))
+print(pl)
+
+pl2 <- ggplot(data = sim_reg %>% filter(1 / alpha == 52), 
+             mapping = aes(x = e_RH, y = e_RH_se, color = R2, shape = factor(R0))) + 
+  geom_vline(xintercept = e_RH, linetype = "dotted") + 
+  geom_point() + 
+  #facet_wrap(~ factor(R0)) + 
+  scale_color_viridis(option = "turbo", direction = -1) +
+  theme_classic() + 
+  theme(legend.position = "top") + 
+  labs(x = "Point estimate of relative humidity effect", y = "Standard error of estimate", 
+       color = expression(R^2), shape = expression(R[0]))
+print(pl2)
+
+ggsave(plot = pl, 
+       filename = sprintf("_figures/_main/vignette-descendant-bias-main-%s-Te.pdf", loc_nm), 
+       width = 8, 
+       height = 8)
+
+ggsave(plot = pl2, 
+       filename = sprintf("_figures/_main/vignette-descendant-bias-main-%s-RH.pdf", loc_nm), 
+       width = 8, 
        height = 8)
 
 # End statements ----------------------------------------------------------
