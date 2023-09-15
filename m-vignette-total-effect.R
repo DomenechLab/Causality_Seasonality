@@ -38,13 +38,15 @@ parms <- c("mu" = 1 / 80 / 52, # Birth rate
            "rho_k" = 0.04) # Reporting over-dispersion
 
 # Load climatic data in a given location------------------------------------------------------------
-# Bogota (Colombia): weather station "SKBO"
-# Rostock (Germany): Rostock
-loc_nm <- "Rostock" ## Choose here the location!
+# Pasto (Colombia): weather station "SKPS"
+# Lübeck (Germany): weather station "EDHL"
+loc_nm <- "EDHL" ## Choose here the location!
 
 if(loc_nm == "SKPS") loc_tidy_nm <- "Pasto"
-if(loc_nm == "SKBO") loc_tidy_nm <- "Bogotá"
-if(loc_nm == "Rostock") loc_tidy_nm <- "Lübbeck"
+if(loc_nm == "EDHL") loc_tidy_nm <- "Lübeck"
+if(loc_nm == "SKPS") loc_country <- "Colombia"
+if(loc_nm == "EDHL") loc_country <- "Germany"
+
 
 clim_dat <- CreateClimData(loc_nm = loc_nm, n_years = 10) 
 
@@ -60,12 +62,7 @@ clim_dat_long <- clim_dat %>%
   pivot_longer(cols = Te:RH_pred_norm_miss, names_to = "var", values_to = "value")
 
 # Plot time series of climatic variables
-fun_PlotClimData(loc_nm, clim_data_list = F, country = "Colombia")
-
-# Add lagged variables for Te_norm and RH_norm
-# clim_dat <- clim_dat %>% 
-#   mutate(Te_norm_lag = lag(x = Te_norm, n = 1L, order_by = week_no), 
-#          RH_pred_norm_lag = lag(x = RH_pred_norm, n = 1L, order_by = week_no))
+fun_PlotClimData(loc_nm, clim_data_list = F, country = loc_country)
 
 # Prepare covariate table --------------------------------------------------------------------------
 covars <- clim_dat %>% 
@@ -82,7 +79,7 @@ base_pars <- pomp::coef(PompMod)
 # Run simulations ----------------------------------------------------------------------------------
 pomp::coef(PompMod, names(base_pars)) <- unname(base_pars)
 rho_mean_val <- unname(coef(PompMod, "rho_mean"))
-rho_k_val <- 0.04 # Reporting overdispersion
+rho_k_val <- 0.04
 N_val <- unname(coef(PompMod, "N"))
 
 R0_seq <- c(1.25, 2.5)
@@ -91,7 +88,11 @@ eps_seq <- 1
 e_Te_seq <- c(0, -0.2)
 e_RH_seq <- -0.2
 
-all_parms <- expand_grid(R0 = R0_seq, alpha = alpha_seq, eps = eps_seq, e_Te = e_Te_seq, e_RH = e_RH_seq) %>% 
+all_parms <- expand_grid(R0 = R0_seq, 
+                         alpha = alpha_seq, 
+                         eps = eps_seq, 
+                         e_Te = e_Te_seq, 
+                         e_RH = e_RH_seq) %>% 
   mutate(.id = seq_len(nrow(.)))
 
 p_mat <- parmat(params = coef(PompMod), 
@@ -131,9 +132,7 @@ sim_long <- sim %>%
   mutate(beta_seas = exp(e_Te * (Te_norm - 1)) * exp(e_RH * (RH_pred_norm - 1))) 
 
 # Plot simulations ---------------------------------------------------------------------------------
-if(loc_nm == "SKPS") col <- c("#8CD1BB", "#407967")
-if(loc_nm == "SKBO") col <- c("#8CD1BB", "#407967")
-if(loc_nm == "Rostock") col <- c("pink", "firebrick2")
+col <- c("pink", "firebrick2")
 
 sim_long %>%
   ggplot(aes(x = week_no / 52, y = value / N, color = Te_effect, group = Te_effect)) + 
@@ -143,14 +142,15 @@ sim_long %>%
   scale_color_manual("Effect of temperature", values = col) + 
   theme(legend.position = "top")
 
-saveRDS(sim_long, glue("_saved/sim_te_effect_{loc_tidy_nm}.rds"))
+saveRDS(sim_long, glue("_saved/_vignette_total_effect/sim_te_effect_{loc_tidy_nm}.rds"))
 
 # Plot effect of temperature -----------------------------------------------------------------------
 
-sim_long <- readRDS(glue("_saved/sim_te_effect_Pasto.rds")) %>%
-  bind_rows(readRDS(glue("_saved/sim_te_effect_Lübbeck.rds")), .id = "loc_tidy_nm") %>%
+sim_long <- readRDS(glue("_saved/_vignette_total_effect/sim_te_effect_Pasto.rds")) %>%
+  bind_rows(readRDS(glue("_saved/_vignette_total_effect/sim_te_effect_Lübeck.rds")), 
+            .id = "loc_tidy_nm") %>%
   mutate(loc_tidy_nm = case_when(loc_tidy_nm == 1 ~ "Pasto",
-                                 loc_tidy_nm == 2 ~ "Lübbeck"))
+                                 loc_tidy_nm == 2 ~ "Lübeck"))
 
 # Main figure
 pl1a <- sim_long %>%
@@ -159,30 +159,39 @@ pl1a <- sim_long %>%
   geom_line() + 
   scale_x_continuous("Time (weeks)") + 
   scale_y_continuous("Transmission rate") + 
-  scale_color_manual("Effect of temperature", values = col) +
+  scale_color_manual("Effect of temperature", values = col,
+                     labels = c(expression(paste("Indirect effect (", delta[Te], " = 0, ", delta[RH], " = -0.2)")),
+                                expression(paste("Total effect (", delta[Te], " = -0.2, ", delta[RH], " = -0.2)")))) +
   facet_wrap(loc_tidy_nm~., scales = "free", ncol = 1) + 
   theme(legend.position = "top",
         legend.direction = "vertical",
         legend.justification = "left",
         strip.background = element_blank())
 
+pl1b_labs <- c(
+  expression(paste("Lübeck: Indirect effect (", delta[Te], " = 0, ", delta[RH], " = -0.2)")),
+  expression(paste("Lübeck: Total effect (", delta[Te], " = -0.2, ", delta[RH], " = -0.2)")),
+  expression(paste("Pasto: Indirect effect (", delta[Te], " = 0, ", delta[RH], " = -0.2)")),
+  expression(paste("Pasto: Total effect (", delta[Te], " = -0.2, ", delta[RH], " = -0.2)")))
+
 pl1b <- sim_long %>%
   filter(R0 == 1.25) %>% 
   mutate(loc_te = glue("{loc_tidy_nm}: {Te_effect}")) %>%
+  mutate(loc_te = factor(loc_te, labels = pl1b_labs)) %>%
   ggplot(aes(x = Te, y = beta_seas, color = Te_effect, group = Te_effect)) + 
   geom_point() + 
   scale_x_continuous("Temperature (°C)") + 
   scale_y_continuous("Transmission rate") + 
-  facet_wrap(loc_te~., scales = "free") + 
+  facet_wrap(loc_te~., scales = "free", labeller = label_parsed) + 
   scale_color_manual("Effect of temperature", values = col) + 
   geom_smooth(color = "grey") + 
   theme(legend.position = "none",
         strip.background = element_blank())
 
-pl1 <- pl1a + pl1b
+pl1 <- pl1a + pl1b + plot_annotation(tag_levels = "A")
 
-ggsave(pl1, file = glue("_figures/vignette-total-effect.pdf"), 
-       height = 6, width = 12)
+ggsave(pl1, file = glue("_figures/00_Fig_total-effect.pdf"), 
+       height = 6.5, width = 12.5)
 
 pls1a <- sim_long %>%
   filter(state_var == "CC") %>%
@@ -191,8 +200,10 @@ pls1a <- sim_long %>%
   geom_line() + 
   scale_x_continuous("Time (weeks)") + 
   scale_y_continuous("Total cases (per week per 100)") + 
-  scale_color_manual("Effect of temperature", values = col) + 
-  facet_grid(loc_tidy_nm~., scales = "free") + 
+  scale_color_manual("Effect of temperature", values = col,
+                     labels = c(expression(paste("Indirect effect (", delta[Te], " = 0, ", delta[RH], " = -0.2)")),
+                                expression(paste("Total effect (", delta[Te], " = -0.2, ", delta[RH], " = -0.2)")))) +
+  facet_wrap(loc_tidy_nm~., scales = "free", ncol = 1) + 
   theme(strip.background = element_blank(),
         legend.position = "top",
         legend.direction = "vertical",
@@ -203,20 +214,21 @@ pls2a <- sim_long %>%
   filter(state_var == "CC") %>%
   filter(R0 == 1.25) %>% 
   mutate(loc_te = glue("{loc_tidy_nm}: {Te_effect}")) %>%
+  mutate(loc_te = factor(loc_te, labels = pl1b_labs)) %>%
   ggplot(aes(x = Te, y = value/N*100, color = Te_effect, group = Te_effect)) + 
   geom_point() + 
   scale_x_continuous("Temperature (°C)") + 
   scale_y_continuous("Total cases (per week per 100)") + 
-  facet_wrap(loc_te~., scales = "free") + 
+  facet_wrap(loc_te~., scales = "free", labeller = label_parsed) + 
   scale_color_manual("Effect of temperature", values = col) + 
   geom_smooth(color = "grey") + 
   theme(legend.position = "none",
         strip.background = element_blank())
 
-pls1 <- pls1a + pls2a
+pls1 <- pls1a + pls2a + plot_annotation(tag_levels = "A")
 
-ggsave(pls1, file = glue("_figures/supplements_vignette-total-effect.pdf"), 
-       height = 6, width = 12)
+ggsave(pls1, file = glue("_figures/00_Suppfig_total-effect.pdf"), 
+       height = 6.5, width = 12.5)
 
 ####################################################################################################
 # END

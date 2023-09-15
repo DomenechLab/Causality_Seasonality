@@ -45,9 +45,12 @@ parms <- c("mu" = 1 / 80 / 52, # Birth rate
            "rho_k" = 0.04) # Reporting over-dispersion
 
 # Load names of the locations ----------------------------------------------------------------------
-country_name <- "Colombia"
-names_l <- unique(filter(readRDS("_data/clim_data.rds"), country == country_name)$loc)
-names_l <- str_subset(names_l, "GCLP|Villavicencio|Cartagena|Armenia", negate = T)
+# Choose between Spain and Colombia
+country_name <- "Spain"
+names_l <- unique(filter(readRDS("_data/spat_data.rds"), country == country_name)$loc)
+
+#names_l <- unique(filter(readRDS("_data/clim_data.rds"), country == country_name)$loc)
+#names_l <- str_subset(names_l, "GCLP|Villavicencio|Cartagena|Armenia", negate = T)
 
 # Load climatic data in all the locations ----------------------------------------------------------
 e_Te <- parms["e_Te"]
@@ -90,13 +93,13 @@ simulations_l <- sapply(names_l, fun_SimulationsMod, all_parms = all_parms, simp
 # Plot simulations 
 pl_simulations_l <- sapply(names_l, function(x) {
   pl <- ggplot(data = simulations_l[[x]] %>%
-                 mutate(id_lab = glue("SIR, R0 = {R0}, alpha = 1/52*{1/(52*alpha)}")), aes(x = week_no / 52, y = value / N)) + 
+                 mutate(id_lab = glue("R0 = {R0}, alpha = 1/52*{1/(52*alpha)}")), aes(x = week_no / 52, y = value / N)) + 
     geom_line() + 
     facet_wrap(~ id_lab + state_var, scales = "free_y", 
                ncol = 4, dir = "v", strip.position = "top") + 
     labs(x = "Year", y = "Proportion") + 
     ggtitle(x)
-  ggsave(pl, file = glue("_figures/{country_name}_{x}_simulations.pdf"), height = 10)
+  ggsave(pl, file = glue("_figures/Simulations_{country_name}_{x}.pdf"), height = 10)
   return(pl)
 }, simplify = F)
 
@@ -104,7 +107,7 @@ pl_simulations_l$SKAR
 
 # Load spatial data  -------------------------------------------------------------------------------
 spat_dat <- readRDS("_data/spat_data.rds") %>%
-  filter(loc_country_name == country_name)
+  filter(country == country_name)
 
 # Plot climate data organized by latitude 
 bind_rows(clim_dat_long_l) %>% 
@@ -125,7 +128,7 @@ pl_clim_sncf <- ((sncf_clim_l$Te$plot[[1]] | sncf_clim_l$Te$plot[[2]]) + plot_la
   ((sncf_clim_l$RH_pred$plot[[1]] | sncf_clim_l$RH_pred$plot[[2]]) + plot_layout(widths = c(5, 1.5)))
 pl_clim_sncf
 
-ggsave(pl_clim_sncf, file = glue("_figures/{country_name}_sncfclim.pdf"), 
+ggsave(pl_clim_sncf, file = glue("_figures/Sncfclim_{country_name}.pdf"), 
        height = 9, width = 12)
 
 # Simulations Sncf tests ---------------------------------------------------------------------------
@@ -236,7 +239,7 @@ speed$ccf_speed <- sncf_sim_lag$speed
 
 pl_ss3 <- sncf_sim_lag$data %>%
   ggplot(aes(y = dis_km, x = lag, color = lag)) + 
-  geom_point(size = 2) + 
+  geom_point(size = 3) + 
   scale_color_viridis_c(option = "inferno", direction = -1, end = 0.8, begin = 0.2) + 
   scale_x_continuous("Lag (week)") + 
   scale_y_continuous("Distance (km)") + 
@@ -249,7 +252,7 @@ pl_ss4 <- ggplot() +
                aes(x=long, y = lat, group = group), fill = "grey90") + 
   geom_point(data = sncf_sim_lag$data,
              aes(x = lon, y = lat, color = lag),
-             size = 2) + 
+             size = 3) + 
   scale_color_viridis_c("Lag \n(week)", option = "inferno", direction = -1, end = 0.8, begin = 0.2) + 
   scale_x_continuous("Longitude (°)") + 
   scale_y_continuous("Latitude (°N)") + 
@@ -261,11 +264,16 @@ pl_ss4 <- ggplot() +
 
 # Plot it! -----------------------------------------------------------------------------------------
 
-pl_sim_sncf <- ((sncf_sim_l$id4$plot[[1]] | sncf_sim_l$id4$plot[[2]]) + plot_layout(widths = c(3,1))) / (pl_ss1 | pl_ss2 | pl_ss3 | pl_ss4) 
-pl_sim_sncf <- sncf_sim_l$id4$plot[[1]] / (sncf_sim_l$id4$plot[[2]] | pl_ss3 | pl_ss4 )
+#pl_sim_sncf <- ((sncf_sim_l$id4$plot[[1]] | sncf_sim_l$id4$plot[[2]]) + plot_layout(widths = c(3,1))) / (pl_ss1 | pl_ss2 | pl_ss3 | pl_ss4) 
+pl_sim_sncf <- sncf_sim_l$id4$plot[[1]] / (sncf_sim_l$id4$plot[[2]] | pl_ss4 | pl_ss3 ) + plot_annotation(tag_levels = "A")
 
-ggsave(pl_sim_sncf, file = glue("_figures/{country_name}_sncfsimulations.pdf"), 
-       height = 9, width = 15)
+if(country_name == "Spain") { 
+  ggsave(pl_sim_sncf, height = 9, width = 15, 
+         file = glue("_figures/00_Suppfig_spatial_diffusion_{country_name}.pdf")) }
+
+if(country_name == "Colombia") { 
+  ggsave(pl_sim_sncf, height = 9, width = 15, 
+         file = glue("_figures/00_Fig_spatial_diffusion_{country_name}.pdf")) }
 
 ####################################################################################################
 # END

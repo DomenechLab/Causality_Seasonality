@@ -40,13 +40,13 @@ fun_SimulationsSncf <- function(sim_id = 1) {
     group_by(.id, loc) %>%
     mutate(inc = value/N,
            inc_minmax = (inc - min(inc))/ (max(inc) - min(inc))) %>%
-    ggplot(aes(fill = inc_minmax, x = week_no/52, y = reorder(loc_lab, lat))) + 
+    ggplot(aes(fill = inc_minmax, x = week_no, y = reorder(loc_lab, lat))) + 
     geom_tile() +
     scale_fill_viridis_c("Scaled incidence",
                          labels = function(x) format(round(x, 1), nsmall = 1)) + 
-    scale_x_continuous("Year", expand = c(0,0), breaks = 0:10) + 
+    scale_x_continuous("Time (weeks)", expand = c(0,0)) + 
     scale_y_discrete(expand = c(0,0)) + 
-    facet_grid(~glue("{all_params_labs$mod}: R0 = {all_params_labs$R0}, alpha = 1/52*{all_params_labs$alpha}")) +
+    #facet_grid(~glue("R0 = {all_params_labs$R0}, alpha = 1/52*{all_params_labs$alpha}")) +
     theme(axis.title.y = element_blank(),
           legend.position = "top",
           strip.background = element_blank())

@@ -20,25 +20,10 @@ dirs$figures <- "_figures"
 
 if(!file.exists(glue("{dirs$data}/spat_data.rds"))) {
   spat_dat <- readxl::read_excel(glue("{dirs$data}/countries_coordinates.xlsx")) %>%
-    separate(loc_city_station, sep = " ", into = c("loc", "rest")) %>%
-    select(-c(rest, loc_city_airport)) %>%
-    rename(loc_city_name = 3,
-           lon = 4,
-           lat = 5)
-  
-  # Load names of the locations 
-  names_l <- unique(filter(readRDS("_data/clim_data.rds"), country %in% c("Colombia", "Spain"))$loc)
-  names_l <- str_subset(names_l, "GCLP", negate = T)
-  
-  # Join the spatial data with the names of locations and select first values (main cities)
-  spat_dat <- data.frame(loc = names_l) %>%
-    left_join(spat_dat) %>%
-    group_by(loc) %>%
-    mutate(lon = mean(lon),
-           lat = mean(lat)) %>%
-    mutate(n = row_number()) %>%
-    filter(n == 1)
-  
+    rename(loc = station_name,
+           loc_city_name = station_city,
+           lon = station_lon,
+           lat = station_lat)
   saveRDS(spat_dat, glue("{dirs$data}/spat_data.rds"))
 } else {
   spat_dat <- readRDS("_data/spat_data.rds")
@@ -46,13 +31,13 @@ if(!file.exists(glue("{dirs$data}/spat_data.rds"))) {
 
 # Plot spatial data --------------------------------------------------------------------------------
 
-# Map of Spain 
-pl_spain <- ggplot() +
-  geom_polygon(data = filter(map_data("world"), region == "Spain"), 
+# Map of Germany 
+pl_germany <- ggplot() +
+  geom_polygon(data = filter(map_data("world"), region == "Germany"), 
                aes(x=long, y = lat, group = group), fill = "grey90") + 
-  geom_point(data = filter(spat_dat, loc_country_name == "Spain"),
+  geom_point(data = filter(spat_dat, country == "Germany"),
              aes(x = lon, y = lat, color = reorder(loc, -lat))) + 
-  geom_label_repel(data = filter(spat_dat, loc_country_name == "Spain"),
+  geom_label_repel(data = filter(spat_dat, country == "Germany"),
                    aes(x = lon, y = lat, color = reorder(loc, -lat), 
                        label = glue("{loc_city_name} ({loc})"))) + 
   scale_color_viridis_d("Station", option = "turbo") + 
@@ -61,15 +46,31 @@ pl_spain <- ggplot() +
   coord_map() + 
   theme(legend.position = "none",
         panel.grid = element_blank())
-ggsave(pl_spain, file = glue("_figures/spain_map.pdf"), width = 5.5)
+ggsave(pl_germany, file = glue("_figures/Map_Germany.pdf"), width = 5.5)
+
+pl_spain <- ggplot() +
+  geom_polygon(data = filter(map_data("world"), region == "Spain"), 
+               aes(x=long, y = lat, group = group), fill = "grey90") + 
+  geom_point(data = filter(spat_dat, country == "Spain"),
+             aes(x = lon, y = lat, color = reorder(loc, -lat))) + 
+  geom_label_repel(data = filter(spat_dat, country == "Spain"),
+                   aes(x = lon, y = lat, color = reorder(loc, -lat), 
+                       label = glue("{loc_city_name} ({loc})"))) + 
+  scale_color_viridis_d("Station", option = "turbo") + 
+  scale_x_continuous("Longitude (°)") + 
+  scale_y_continuous("Latitude (°N)") + 
+  coord_map() + 
+  theme(legend.position = "none",
+        panel.grid = element_blank())
+ggsave(pl_spain, file = glue("_figures/Map_Spain.pdf"), width = 5.5)
 
 # Map of Colombia 
 pl_colombia <- ggplot() +
   geom_polygon(data = filter(map_data("world"), region == "Colombia"), 
                aes(x=long, y = lat, group = group), fill = "grey90") + 
-  geom_point(data = filter(spat_dat, loc_country_name == "Colombia"),
+  geom_point(data = filter(spat_dat, country == "Colombia"),
              aes(x = lon, y = lat, color = reorder(loc, -lat))) + 
-  geom_label_repel(data = filter(spat_dat, loc_country_name == "Colombia"),
+  geom_label_repel(data = filter(spat_dat, country == "Colombia"),
                    aes(x = lon, y = lat, color = reorder(loc, -lat), 
                        label = glue("{loc_city_name} ({loc})"))) + 
   scale_color_viridis_d("Station", option = "turbo") + 
@@ -78,7 +79,8 @@ pl_colombia <- ggplot() +
   coord_map() + 
   theme(legend.position = "none",
         panel.grid = element_blank())
-ggsave(pl_colombia, file = glue("_figures/colombia_map.pdf"), width = 5.5)
+
+ggsave(pl_colombia, file = glue("_figures/Map_Colombia.pdf"), width = 5.5)
 
 ####################################################################################################
 # END
