@@ -9,7 +9,7 @@ source("f-Pred_RH.R")
 Pred_RH <- Vectorize(FUN = Pred_RH)
 source("f-CreateClimData.R")
 theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
-save_plot <- T # Should all the plots be saved as a pdf? 
+save_plot <- F # Should all the plots be saved as a pdf? 
 
 #######################################################################################################
 # VIGNETTE ON QUASI-EXPERIMENTS

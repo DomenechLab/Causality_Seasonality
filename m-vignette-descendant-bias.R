@@ -15,7 +15,7 @@ source("s-base_packages.R")
 library("mgcv")
 library("pomp")
 theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
-save_plot <- T # Should all the plots be saved as a pdf? 
+save_plot <- F # Should all the plots be saved as a pdf? 
 
 # Set model parameters ----------------------------------------------------
 parms <- c("mu" = 1 / 80 / 52, # Birth rate 
@@ -327,6 +327,7 @@ est_perf <- sim_reg %>%
             e_Te_se_mean = mean(e_Te_se), 
             e_Te_se_sd = sd(e_Te_se), 
             e_Te_pow = mean(e_Te + 1.96 * e_Te_se < 0), 
+            e_Te_FP = mean(e_Te - 1.96 * e_Te_se > 0),
             e_RH_bias_mean = mean(abs(e_RH - parms["e_RH"])),
             e_RH_bias_sd = sd(abs(e_RH - parms["e_RH"])), 
             e_RH_se_mean = mean(e_RH_se), 
@@ -361,7 +362,7 @@ tmp <- clim_dat_long %>%
                       levels = c("Te_norm", "RH_pred_norm", "beta_seas"), 
                       labels = c("Temperature", "Relative humidity", "Transmission rate")))
 
-pl_left <- ggplot(data = tmp, 
+pl_A <- ggplot(data = tmp, 
                   mapping = aes(x = week_no, 
                                 y = value)) + 
   geom_line() + 
@@ -372,44 +373,71 @@ pl_left <- ggplot(data = tmp,
         #strip.text = element_text(colour = "black", size = rel(1.2)), 
         panel.spacing = unit(1, "cm")) + 
   labs(x = "Time (weeks)", y = "Renormalized value")
-print(pl_left)
+print(pl_A)
 
 # Plot of CC and S
 tmp <- sim_long %>% 
   filter(1 / alpha == 52, state_var %in% c("S", "CC")) %>% 
   mutate(state_var = factor(state_var, levels = c("CC", "S"), 
-                            labels = c("Incidence rate (% per week)", "Susceptible prevalence (%)")), 
+                            labels = c("Incidence rate", "Susceptible prevalence")), 
          R0 = factor(R0))
 levels(tmp$R0) <- paste0("R0 = ", levels(tmp$R0))
 
 
-pl_right <- ggplot(data = tmp, 
-                   mapping = aes(x = week_no, y = 1e2 * value / N, color = R0, linetype = state_var)) + 
+pl_B <- ggplot(data = tmp, 
+                   mapping = aes(x = week_no, y = 1e2 * value / N, linetype = state_var)) + 
   geom_line(linewidth = 0.5) + 
   facet_wrap(~factor(R0), scales = "free_y", ncol = 1) + 
   scale_y_sqrt() + 
-  scale_color_viridis(discrete = T, option = "rocket", direction = -1, end = 0.75) +
+  #scale_color_viridis(discrete = T, option = "rocket", direction = -1, end = 0.75) +
   #scale_linetype_discrete(breaks = c("solid", "dotted")) + 
   #scale_y_log10() + 
   theme_classic() + 
   theme(strip.background = element_blank(), 
         legend.position = "top", 
+        legend.text = element_text(size = 10),
         panel.spacing = unit(1, "cm")) + 
   guides(color = "none") + 
   labs(x = "Time (weeks)", y = "Value", color = expression(R[0]), linetype = "")
-print(pl_right)
+print(pl_B)
 
-# Assemble plot
+tmp <- sim_reg %>% 
+  filter(1 / alpha == 52) %>% 
+  mutate(R0 = factor(R0))
+levels(tmp$R0) <- paste0("R0 = ", levels(tmp$R0))
 
-pl_all <- pl_left + pl_right + 
+pl_C <- ggplot(data = tmp, 
+             mapping = aes(x = e_Te, color = e_Te_se)) + 
+  geom_vline(xintercept = parms["e_Te"], linetype = "dotted") + 
+  geom_density() + 
+  geom_rug(alpha = 1) + 
+  # geom_violin() + 
+  # geom_point() + geom_jitter(height = 0.1) + 
+  facet_wrap(~ R0, scales = "fixed", ncol = 1) + 
+  scale_color_viridis(option = "magma", direction = 1) + 
+  theme_classic() + 
+  theme(strip.background = element_blank(), 
+        legend.position = "top", 
+        panel.spacing = unit(1, "cm"), 
+        legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8)) + 
+  labs(x = "Point estimate of temperature effect",
+       y = "Density",
+       color = "Standard error")
+print(pl_C)
+
+# Assemble plots ----------------------------------------------------------
+pl_all <- pl_A + pl_B + pl_C +  
   plot_annotation(tag_levels = "A") & 
   theme(plot.tag = element_text(size = 10))
 print(pl_all)
 
-ggsave(plot = pl_all, 
-       filename = sprintf("_figures/_main/vignette-descendant-bias-main-%s.pdf", loc_nm), 
-       width = 10, 
-       height = 8)
+if(save_plot) {
+  ggsave(plot = pl_all, 
+         filename = sprintf("_figures/_main/vignette-descendant-bias-main-%s.pdf", loc_nm), 
+         width = 12, 
+         height = 8)
+}
 
 # FIGURE 2: Parameter estimates from regression ---------------------------------------------------------------
 tmp <- sim_reg %>% 
@@ -418,8 +446,8 @@ tmp <- sim_reg %>%
   pivot_longer(cols = c("Te", "RH"), names_to = "var", values_to = "est")
   
 pl <- ggplot(data = sim_reg %>% filter(1 / alpha == 52), 
-             mapping = aes(x = e_Te, y = e_Te_se, color = R2, shape = factor(R0))) + 
-  geom_vline(xintercept = e_Te, linetype = "dotted") + 
+             mapping = aes(x = e_Te, y = e_Te_se, shape = factor(R0))) + 
+  geom_vline(xintercept = parms["e_Te"], linetype = "dotted") + 
   geom_point() + 
   #geom_xsidedensity(mapping = aes(y = stat(density))) + 
   #facet_wrap(~ factor(R0)) + 
@@ -431,8 +459,8 @@ pl <- ggplot(data = sim_reg %>% filter(1 / alpha == 52),
 print(pl)
 
 pl2 <- ggplot(data = sim_reg %>% filter(1 / alpha == 52), 
-             mapping = aes(x = e_RH, y = e_RH_se, color = R2, shape = factor(R0))) + 
-  geom_vline(xintercept = e_RH, linetype = "dotted") + 
+             mapping = aes(x = e_RH, y = e_RH_se, shape = factor(R0))) + 
+  geom_vline(xintercept = parms["e_RH"], linetype = "dotted") + 
   geom_point() + 
   #facet_wrap(~ factor(R0)) + 
   scale_color_viridis(option = "turbo", direction = -1) +
@@ -442,15 +470,17 @@ pl2 <- ggplot(data = sim_reg %>% filter(1 / alpha == 52),
        color = expression(R^2), shape = expression(R[0]))
 print(pl2)
 
-ggsave(plot = pl, 
-       filename = sprintf("_figures/_main/vignette-descendant-bias-main-%s-Te.pdf", loc_nm), 
-       width = 8, 
-       height = 8)
-
-ggsave(plot = pl2, 
-       filename = sprintf("_figures/_main/vignette-descendant-bias-main-%s-RH.pdf", loc_nm), 
-       width = 8, 
-       height = 8)
+if(save_plot) {
+  ggsave(plot = pl, 
+         filename = sprintf("_figures/_main/vignette-descendant-bias-main-%s-Te.pdf", loc_nm), 
+         width = 8, 
+         height = 8)
+  
+  ggsave(plot = pl2, 
+         filename = sprintf("_figures/_main/vignette-descendant-bias-main-%s-RH.pdf", loc_nm), 
+         width = 8, 
+         height = 8)
+}
 
 # End statements ----------------------------------------------------------
 if(save_plot) dev.off()
