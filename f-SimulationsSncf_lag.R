@@ -45,17 +45,40 @@ fun_SimulationsSncf_lag <- function(sim_id = 1, reference = "SKRH") {
            lon_km = (dsm::latlong2km(lat = lat, lon = lon))$km.e,
            lon_km = lon_km + abs(min(lon_km))) 
   
-    # Calculate distance from reference  
-    lim_lat <- unlist(filter(ccf_max, loc == reference)[,"lat_km"])
-    lim_lon <- unlist(filter(ccf_max, loc == reference)[,"lon_km"])
+    # Calculate distance from reference 
+    # Calculate distance from more distant
+    if(country_name == "Colombia") reference <- "SKRH"
+    if(country_name == "Spain") reference <- "LEZL"
+  
+    lim_lat <- unlist(filter(ccf_max, loc == reference)[,"lat"])
+    lim_lon <- unlist(filter(ccf_max, loc == reference)[,"lon"])
 
+    library(geosphere)
+    
+    distm(select(ccf_max, lon, lat), c(lim_lon, lim_lat), fun = distGeo)/1000
+    
     ccf_max <- ccf_max %>%
-      mutate(dis_km = sqrt((lat_km - lim_lat)^2+(lon_km  - lim_lon)^2)) 
+      #mutate(dis_km = sqrt((lat_km - lim_lat)^2+(lon_km  - lim_lon)^2)) 
+      mutate(dis_km = c(distm(select(ccf_max, lon, lat), c(lim_lon, lim_lat), fun = distGeo)/1000))
     
     # Calculate speed 
-    mod <- lm(lag ~ dis_km, data = ccf_max)
-    ccf_speed <- list(mean = (1/coef(mod)[[2]])*4,
-                      sd = (1/coef(mod)[[2]])*4 - (1/(coef(mod)[[2]] + sqrt(diag(vcov(mod)))[[2]]))*4) #km/mo
+    # mod <- lm(lag ~ dis_km, data = ccf_max)
+    # ccf_speed <- list(mean = (1/coef(mod)[[2]])*4,
+    #                   sd = (1/coef(mod)[[2]])*4 - (1/(coef(mod)[[2]] + sqrt(diag(vcov(mod)))[[2]]))*4) #km/mo
+    library(brms)
+    library(tidybayes) 
+    mod <- brms::brm(lag ~ dis_km, data = ccf_max)
+    get_variables(mod)
+    ccf_speed <- mod %>%
+      spread_draws(b_dis_km) %>%
+      mutate(speed = (1/b_dis_km)*4) %>%
+      summarise(mean(b_dis_km), sd(b_dis_km), quantile(b_dis_km, 0.025), quantile(b_dis_km, 0.975),
+                mean(speed), sd(speed), quantile(speed, 0.025), quantile(speed, 0.975))
+    
+    ccf_new <- data.frame(
+      dis_km = seq(min(ccf_max$dis_km), max(ccf_max$dis_km), length.out = 2000))
+    pred <- as.data.frame(predict(mod, newdata = ccf_new)) %>%
+      mutate(dis_km = ccf_new$dis_km)
     
     # Plot 
     pl <- ccf_max %>%
@@ -66,6 +89,7 @@ fun_SimulationsSncf_lag <- function(sim_id = 1, reference = "SKRH") {
       scale_y_continuous("Lag (weeks)")
 
   return(list(data = ccf_max,
+              pred = as.data.frame(pred),
               speed = ccf_speed,
               plot = pl))
 }

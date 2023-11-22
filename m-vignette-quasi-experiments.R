@@ -43,7 +43,7 @@ parms <- c("mu" = 1 / 80 / 52, # Birth rate
 # Rostock (Germany): Rostock, rho(Te, RH) = -0.69, CV(RH) = 0.085
 # Pasto (Colombia): "SKPS", rho(Te, RH) = -91, CV(RH) = 0.019
 
-e_Te <- parms["e_Te"]
+e_Te <- parms["e_Te"]  
 e_RH <- parms["e_RH"]
 loc_nm <- "SKBO"
 if(save_plot) pdf(file = sprintf("_saved/vignette-quasi-experiments-%s.pdf", loc_nm), width = 8, height = 8)

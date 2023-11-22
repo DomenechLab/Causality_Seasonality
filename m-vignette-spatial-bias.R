@@ -27,6 +27,8 @@ library(glue)
 library(ncf)
 theme_set(theme_classic())
 
+set.seed(1854)
+
 # Set directories 
 dirs <- list()
 dirs$data <- "_data"
@@ -143,107 +145,129 @@ sncf_sim_l$id4$plot
 
 # Spatial spread -----------------------------------------------------------------------------------
 
-# Spatial spread from peak timing ------------------------------------------------------------------
-
-# Create spatial spread data.frame
-ss_df <- bind_rows(simulations_l) %>%
-  filter(state_var == "CC") %>%
-  # Select trajectory
-  filter(.id == 4) %>%
-  # Add spatial data 
-  left_join(spat_dat[c("loc","lon","lat","loc_city_name")]) %>%
-  mutate(loc_lab = glue("{loc_city_name} ({loc})")) %>%
-  group_by(.id, loc) %>%
-  # Incidence, week and year
-  mutate(inc = value/N,
-         week_yr = rep(1:52, 10),
-         year = rep(1:10, each = 52)) %>%
-  group_by(.id, loc, loc_lab, lat, week_yr) %>%
-  mutate(mean_inc = mean(inc)) %>%
-  ungroup() %>%
-  # Peak for the mean seasonality
-  group_by(.id, loc, loc_lab, lat) %>%
-  mutate(max_mean_inc = max(mean_inc)) %>%
-  ungroup() %>%
-  # Peak for each year 
-  group_by(.id, loc, loc_lab, lat, year) %>%
-  mutate(max_inc = max(inc)) 
-
-# Plot maximum values of incidence 
-ss_df %>%
-  ggplot(aes(y = inc, x = week_yr, group = year, color = year)) + 
-  geom_line() +
-  geom_line(aes(x = week_yr, y = max_inc, group = year, color = year)) + 
-  scale_color_viridis_c("Year") + 
-  scale_x_continuous("Week", expand = c(0,0)) + 
-  scale_y_continuous("Incidence", expand = c(0,0)) + 
-  facet_wrap(reorder(loc_lab, -lat)~., scales = "free_y") + 
-  ggtitle("R0 = 2.5, alpha = 1/2*52")
-
-# Transform degrees to km 
-sslm_df <- ss_df %>%
-  filter(max_inc == inc) %>%
-  distinct(lon, lat, loc_lab, loc, week_yr, year) %>%
-  ungroup() %>%
-  mutate(lat_km = (dsm::latlong2km(lat = lat, lon = lon))$km.n,
-         lat_km = lat_km + abs(min(lat_km)), 
-         lon_km = (dsm::latlong2km(lat = lat, lon = lon))$km.e,
-         lon_km = lon_km + abs(min(lon_km)))
-  
-# Calculate distance from more distant 
-if(country_name == "Colombia") reference <- "SKRH"
-if(country_name == "Spain") reference <- "LEZL"
-
-lim_lat <- mean(unlist(filter(sslm_df, loc == reference)[,"lat_km"]))
-lim_lon <- mean(unlist(filter(sslm_df, loc == reference)[,"lon_km"]))
-if(country_name == "Spain") sslm_df <- filter(sslm_df, year != 1)
-
-sslm_df <- sslm_df %>%
-  mutate(dis_km = sqrt((lat_km - lim_lat)^2+(lon_km  - lim_lon)^2)) 
-
-mod <- lm(week_yr~dis_km, data = sslm_df)
-speed <- list(peak_speed = list(mean = (1/coef(mod)[[2]])*4,
-                                sd = (1/coef(mod)[[2]])*4 - (1/(coef(mod)[[2]] + sqrt(diag(vcov(mod)))[[2]]))*4)) #km/mo
-
-pl_ss1 <- sslm_df %>%
-  ggplot(aes(y = dis_km, x = week_yr, color = week_yr)) + 
-  geom_point(size = 2) + 
-  scale_color_viridis_c(option = "inferno", direction = -1, end = 0.8, begin = 0.2) + 
-  scale_x_continuous("Peak timing (week)") + 
-  scale_y_continuous("Distance (km)")+ 
-  facet_grid(~glue("Speed mean = {round(speed$peak_speed$mean)}, std. error = {round(speed$peak_speed$sd)} km/mo")) + 
-  theme(legend.position = "none",
-        strip.background = element_blank())
-
-pl_ss2 <- ggplot() +
-  geom_polygon(data = filter(map_data("world"), region == country_name), 
-               aes(x=long, y = lat, group = group), fill = "grey90") + 
-  geom_point(data = sslm_df %>%
-               group_by(lon, lat, loc_lab) %>%
-               summarise(mean_week_yr = mean(week_yr)),
-             aes(x = lon, y = lat, color = mean_week_yr),
-             size = 2) + 
-  scale_color_viridis_c("Peak timing \n(week)", option = "inferno", direction = -1, end = 0.8, begin = 0.2) + 
-  scale_x_continuous("Longitude (°)") + 
-  scale_y_continuous("Latitude (°N)") + 
-  facet_grid(~glue("{country_name}")) +
-  coord_map() + 
-  theme(panel.grid = element_blank(),
-        legend.position = "left",
-        strip.background = element_blank())
+# # Spatial spread from peak timing ------------------------------------------------------------------
+# 
+# # Create spatial spread data.frame
+# ss_df <- bind_rows(simulations_l) %>%
+#   filter(state_var == "CC") %>%
+#   # Select trajectory
+#   filter(.id == 4) %>%
+#   # Add spatial data 
+#   left_join(spat_dat[c("loc","lon","lat","loc_city_name")]) %>%
+#   mutate(loc_lab = glue("{loc_city_name} ({loc})")) %>%
+#   group_by(.id, loc) %>%
+#   # Incidence, week and year
+#   mutate(inc = value/N,
+#          week_yr = rep(1:52, 10),
+#          year = rep(1:10, each = 52)) %>%
+#   group_by(.id, loc, loc_lab, lat, week_yr) %>%
+#   mutate(mean_inc = mean(inc)) %>%
+#   ungroup() %>%
+#   # Peak for the mean seasonality
+#   group_by(.id, loc, loc_lab, lat) %>%
+#   mutate(max_mean_inc = max(mean_inc)) %>%
+#   ungroup() %>%
+#   # Peak for each year 
+#   group_by(.id, loc, loc_lab, lat, year) %>%
+#   mutate(max_inc = max(inc)) 
+# 
+# # Plot maximum values of incidence 
+# ss_df %>%
+#   ggplot(aes(y = inc, x = week_yr, group = year, color = year)) + 
+#   geom_line() +
+#   geom_line(aes(x = week_yr, y = max_inc, group = year, color = year)) + 
+#   scale_color_viridis_c("Year") + 
+#   scale_x_continuous("Week", expand = c(0,0)) + 
+#   scale_y_continuous("Incidence", expand = c(0,0)) + 
+#   facet_wrap(reorder(loc_lab, -lat)~., scales = "free_y") + 
+#   ggtitle("R0 = 2.5, alpha = 1/2*52")
+# 
+# # Transform degrees to km 
+# sslm_df <- ss_df %>%
+#   filter(max_inc == inc) %>%
+#   distinct(lon, lat, loc_lab, loc, week_yr, year) %>%
+#   ungroup() %>%
+#   mutate(lat_km = (dsm::latlong2km(lat = lat, lon = lon))$km.n,
+#          lat_km = lat_km + abs(min(lat_km)), 
+#          lon_km = (dsm::latlong2km(lat = lat, lon = lon))$km.e,
+#          lon_km = lon_km + abs(min(lon_km)))
+#   
+# # Calculate distance from more distant 
+# if(country_name == "Colombia") reference <- "SKRH"
+# if(country_name == "Spain") reference <- "LEZL"
+# 
+# lim_lat <- mean(unlist(filter(sslm_df, loc == reference)[,"lat_km"]))
+# lim_lon <- mean(unlist(filter(sslm_df, loc == reference)[,"lon_km"]))
+# if(country_name == "Spain") sslm_df <- filter(sslm_df, year != 1)
+# 
+# sslm_df <- sslm_df %>%
+#   mutate(dis_km = sqrt((lat_km - lim_lat)^2+(lon_km  - lim_lon)^2)) 
+# 
+# mod <- lm(week_yr~dis_km, data = sslm_df)
+# speed <- list(peak_speed = list(mean = (1/coef(mod)[[2]])*4,
+#                                 sd = (1/coef(mod)[[2]])*4 - (1/(coef(mod)[[2]] + sqrt(diag(vcov(mod)))[[2]]))*4)) #km/mo
+# 
+# pl_ss1 <- sslm_df %>%
+#   ggplot(aes(y = dis_km, x = week_yr, color = week_yr)) + 
+#   geom_point(size = 2) + 
+#   scale_color_viridis_c(option = "inferno", direction = -1, end = 0.8, begin = 0.2) + 
+#   scale_x_continuous("Peak timing (week)") + 
+#   scale_y_continuous("Distance (km)")+ 
+#   facet_grid(~glue("Speed mean = {round(speed$peak_speed$mean)}, std. error = {round(speed$peak_speed$sd)} km/mo")) + 
+#   theme(legend.position = "none",
+#         strip.background = element_blank())
+# 
+# pl_ss2 <- ggplot() +
+#   geom_polygon(data = filter(map_data("world"), region == country_name), 
+#                aes(x=long, y = lat, group = group), fill = "grey90") + 
+#   geom_point(data = sslm_df %>%
+#                group_by(lon, lat, loc_lab) %>%
+#                summarise(mean_week_yr = mean(week_yr)),
+#              aes(x = lon, y = lat, color = mean_week_yr),
+#              size = 2) + 
+#   scale_color_viridis_c("Peak timing \n(week)", option = "inferno", direction = -1, end = 0.8, begin = 0.2) + 
+#   scale_x_continuous("Longitude (°)") + 
+#   scale_y_continuous("Latitude (°N)") + 
+#   facet_grid(~glue("{country_name}")) +
+#   coord_map() + 
+#   theme(panel.grid = element_blank(),
+#         legend.position = "left",
+#         strip.background = element_blank())
 
 # Spatial spread from ccf lag ----------------------------------------------------------------------
 
+# Calculate distance from more distant
+if(country_name == "Colombia") reference <- "SKRH"
+if(country_name == "Spain") reference <- "LEZL"
+
 sncf_sim_lag <- fun_SimulationsSncf_lag(sim_id = 4, reference = reference)
-speed$ccf_speed <- sncf_sim_lag$speed
+sncf_sim_lag$speed$`mean(speed)`
+sncf_sim_lag$speed$`quantile(speed, 0.025)`
+sncf_sim_lag$speed$`quantile(speed, 0.975)`
+
+# pl_ss3 <- sncf_sim_lag$data %>%
+#   ggplot(aes(y = dis_km, x = lag, color = lag)) + 
+#   geom_point(size = 3) + 
+#   geom_line(aes(x = lag, y = lag * (sncf_sim_lag$speed$`mean(speed)`/4))) + 
+#   scale_color_viridis_c(option = "inferno", direction = -1, end = 0.8, begin = 0.2) + 
+#   scale_x_continuous("Lag (week)") + 
+#   scale_y_continuous("Distance (km)") + 
+#   facet_grid(~glue(" ")) + 
+#   theme(legend.position = "none",
+#         strip.background = element_blank())
 
 pl_ss3 <- sncf_sim_lag$data %>%
-  ggplot(aes(y = dis_km, x = lag, color = lag)) + 
-  geom_point(size = 3) + 
-  scale_color_viridis_c(option = "inferno", direction = -1, end = 0.8, begin = 0.2) + 
-  scale_x_continuous("Lag (week)") + 
-  scale_y_continuous("Distance (km)") + 
-  facet_grid(~glue("Speed mean = {round(speed$ccf_speed$mean)}, std. error = {round(speed$ccf_speed$sd)} km/mo")) + 
+  ggplot(aes(y = lag, x = dis_km, color = lag)) +
+  geom_point(size = 3) +
+  geom_smooth(data = sncf_sim_lag$pred, 
+            aes(y = Estimate, color = Estimate), color = "grey", linewidth = 0.7) +
+  geom_ribbon(data = sncf_sim_lag$pred, 
+              aes(y = Estimate, ymin = Q2.5, ymax = Q97.5), color = "transparent", alpha = 0.1) +
+  #geom_line(aes(y = lag, x = lag * (sncf_sim_lag$speed$`mean(speed)`/4))) +
+  scale_color_viridis_c(option = "inferno", direction = -1, end = 0.8, begin = 0.2) +
+  scale_y_continuous("Lag (week)") +
+  scale_x_continuous("Distance (km)") +
+  facet_grid(~glue(" ")) +
   theme(legend.position = "none",
         strip.background = element_blank())
 
@@ -259,7 +283,7 @@ pl_ss4 <- ggplot() +
   facet_grid(~glue("{country_name}")) +
   coord_map() + 
   theme(panel.grid = element_blank(),
-        legend.position = "left",
+        legend.position = "top",
         strip.background = element_blank())
 
 # Plot it! -----------------------------------------------------------------------------------------
@@ -267,12 +291,16 @@ pl_ss4 <- ggplot() +
 #pl_sim_sncf <- ((sncf_sim_l$id4$plot[[1]] | sncf_sim_l$id4$plot[[2]]) + plot_layout(widths = c(3,1))) / (pl_ss1 | pl_ss2 | pl_ss3 | pl_ss4) 
 pl_sim_sncf <- sncf_sim_l$id4$plot[[1]] / (sncf_sim_l$id4$plot[[2]] | pl_ss4 | pl_ss3 ) + plot_annotation(tag_levels = "A")
 
+pl_sim_sncf <- (pl_ss4| sncf_sim_l$id4$plot[[1]] + theme(legend.justification = "center")) / (pl_ss3 | sncf_sim_l$id4$plot[[2]]) + plot_annotation(tag_levels = "A")
+
+
+#0.024
 if(country_name == "Spain") { 
-  ggsave(pl_sim_sncf, height = 9, width = 15, 
+  ggsave(pl_sim_sncf, height = 7.5, width = 7, 
          file = glue("_figures/00_Suppfig_spatial_diffusion_{country_name}.pdf")) }
 
 if(country_name == "Colombia") { 
-  ggsave(pl_sim_sncf, height = 9, width = 15, 
+  ggsave(pl_sim_sncf, height = 7.5, width = 7, 
          file = glue("_figures/00_Fig_spatial_diffusion_{country_name}.pdf")) }
 
 ####################################################################################################
