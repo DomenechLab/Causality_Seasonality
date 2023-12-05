@@ -15,7 +15,7 @@ source("s-base_packages.R")
 library("mgcv")
 library("pomp")
 theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
-save_plot <- F # Should all the plots be saved as a pdf? 
+save_plot <- T # Should all the plots be saved as a pdf? 
 
 # Set model parameters ----------------------------------------------------
 parms <- c("mu" = 1 / 80 / 52, # Birth rate 
@@ -112,6 +112,7 @@ base_pars <- pomp::coef(PompMod)
 
 # Run simulations ---------------------------------------------------------
 pomp::coef(PompMod, names(base_pars)) <- unname(base_pars)
+#pomp::coef(PompMod, "e_RH") <- 0
 rho_mean_val <- unname(coef(PompMod, "rho_mean"))
 rho_k_val <- 0.04 # Reporting overdispersion
 N_val <- unname(coef(PompMod, "N"))
@@ -176,7 +177,7 @@ for(s in svars_plot) {
   print(pl)
 }
 
-# Run regressions ---------------------------------------------------------
+# Run simulations ---------------------------------------------------------
 n_reps <- 100L # No of stochastic replicates
 
 sims_all <- simulate(object = PompMod, 
@@ -195,56 +196,106 @@ sims_all <- sims_all %>%
   left_join(y = clim_dat %>% select(week_no, matches("Te_norm|RH_pred_norm"), beta_seas)) %>% 
   arrange(.id, rep, week_no)
 
-# Function to run GAM regression model
-f_reg <- function(df) {
+
+# Function to run GAM regression model ------------------------------------
+f_reg <- function(df, model_nm = "smooth_time") {
+  
+  # Args: 
+  # df: simulations (data frame)
+  # model_nm: name of model tested (string), 3 values possible:
+  # "true": true model, with S_{t-1} and I_{t-1} as covariate
+  # "smooth": smooth of time as covariate
+  # "autocorr": autocorrelation term as covariate 
+  
+  # Add lagged time series of observations
+  df <- df %>% 
+    arrange(week_no) %>% 
+    mutate(log_CC_obs_lag = lag(CC_obs, n = 1, order_by = week_no) %>% log1p(), 
+           log_S_lag = lag(S, n = 1, order_by = week_no) %>% log(), 
+           log_I_lag = lag(I, n = 1, order_by = week_no) %>% log())
+  
+  # Covariates always included
+  #covars_mod <- c("1", "Te_norm_lag")
+  covars_mod <- c("1", "Te_norm_lag", "RH_pred_norm_lag")
+  
+  # Other covariates
+  if(model_nm == "true") {
+    covars_mod <- c(covars_mod, c("log_S_lag", "log_I_lag"))
+  } else if(model_nm == "smooth") {
+    covars_mod <- c(covars_mod, "s(week_no, k = 50)")
+  } else if(model_nm == "autocorr") {
+    covars_mod <- c(covars_mod, "log_CC_obs_lag")
+  }
+  
+  # Formula
+  form_mod <- reformulate(termlabels = covars_mod, response = "CC_obs", intercept = T)
   
   # Run GAM model
-  M_nb <- gam(formula = CC_obs ~ 1 + Te_norm_lag + RH_pred_norm_lag + s(week_no, k = 50), 
+  M_nb <- gam(formula = form_mod, 
               family = nb(link = "log"), 
-              data = arrange(df, week_no))
+              data = df)
   
   # Extract regression coefficients
   M_est <- coef(M_nb)
   M_est_se <- summary(M_nb)$se
   R2 <- summary(M_nb)$r.sq
   
-  # Correlation between smooth(time) and log(S*I)
-  s_time <- predict(object = M_nb, type = "terms")
-  s_time <- s_time[, "s(week_no)"]
-  log_SI <- log(df$S * df$I)
-  rho <- cor(x = s_time, y = log_SI, method = "pearson")
-  
   # Return
   out <- data.frame(e_Te = M_est["Te_norm_lag"], 
                     e_Te_se = M_est_se["Te_norm_lag"], 
                     e_RH = M_est["RH_pred_norm_lag"], 
                     e_RH_se = M_est_se["RH_pred_norm_lag"],
-                    rho_sTime_logSI = rho,
                     R2 = R2)
+  
+  if(model_nm == "smooth") {
+    
+    # Correlation between smooth(time) and log(S*I)
+    s_time <- predict(object = M_nb, type = "terms")
+    s_time <- s_time[, "s(week_no)"]
+    log_SI <- log(df$S * df$I)
+    rho <- cor(x = s_time, y = log_SI, method = "pearson")
+    
+    out <- out %>% 
+      mutate(rho_sTime_logSI = rho)
+  }
   
   return(out)
 }
 
-# Run regressions
-sim_reg <- bake(file = sprintf("_saved/_vignette_descendent_bias/vignette-descendant-bias-regressions-%s.rds", loc_nm), 
-                seed = 2186L, 
-                expr = {
-                  sims_all %>% 
-                    group_nest(.id, rep, eps, R0, alpha) %>% 
-                    mutate(reg = purrr::map(.x = data, .f = f_reg,  .progress = T)) %>% 
-                    unnest(cols = "reg") %>% 
-                    select(-data)
-                })
+# Run regressions ---------------------------------------------------------
 
-sim_reg_long <- sim_reg %>% 
+# List all models
+model_nm <- c("true", "smooth", "autocorr")
+sim_reg_all <- vector(mode = "list", length = length(model_nm))
+names(sim_reg_all) <- model_nm
+
+# Run regressions
+for(i in seq_along(model_nm)) {
+  sim_reg_all[[i]] <- bake(file = sprintf("_saved/_vignette_descendent_bias/vignette-descendant-bias-regressions-%s-%s.rds", loc_nm, model_nm[i]), 
+                           seed = 2186L, 
+                           expr = {
+                             sims_all %>% 
+                               group_nest(.id, rep, eps, R0, alpha) %>% 
+                               mutate(reg = purrr::map(.x = data, .f = f_reg, model_nm = model_nm[i], .progress = T)) %>% 
+                               unnest(cols = "reg") %>% 
+                               select(-data)
+                           })
+}
+
+sim_reg_all <- bind_rows(sim_reg_all, .id = "model")
+
+sim_reg_all_long <- sim_reg_all %>% 
   pivot_longer(cols = e_Te:R2) %>% 
   mutate(R0_fac = R0 %>% factor() %>% fct_relabel(.fun = ~ paste0("R0 = ", .x)))
 
 # Plots -------------------------------------------------------------------
+
+model_cur <- "smooth" # Name of model to plot
+
 # Plot point estimates; x-axis: waning rate, panels: R0
-svars_plot <- c("e_Te", "e_RH", "R2", "rho_sTime_logSI")
+svars_plot <- c("e_Te", "e_RH", "R2")
 for(s in svars_plot) {
-  pl <- ggplot(data = sim_reg_long %>% filter(name == s), 
+  pl <- ggplot(data = sim_reg_all_long %>% filter(name == s, model == model_cur), 
                mapping = aes(x = factor(1 / alpha / 52), y = value)) + 
     geom_boxplot() + 
     #facet_grid(R0 ~ factor(1 / alpha / 52), scales = "fixed") + 
@@ -261,7 +312,7 @@ for(s in svars_plot) {
 
 # Plot point estimates; x-axis: R0, panels: waning rate
 for(s in svars_plot) {
-  pl <- ggplot(data = sim_reg_long %>% filter(name == s), 
+  pl <- ggplot(data = sim_reg_all_long %>% filter(name == s, model == model_cur), 
                mapping = aes(x = factor(round(R0, 2)), y = value)) + 
     geom_boxplot() + 
     #facet_grid(R0 ~ factor(1 / alpha / 52), scales = "fixed") + 
@@ -279,14 +330,14 @@ for(s in svars_plot) {
 # Plot precision of estimates
 svars_plot <- c("e_Te_se", "e_RH_se")
 for(s in svars_plot) {
-  pl <- ggplot(data = sim_reg_long %>% filter(name == s), 
+  pl <- ggplot(data = sim_reg_all_long %>% filter(name == s, model == model_cur), 
                mapping = aes(x = factor(1 / alpha / 52), y = value)) + 
     geom_boxplot() + 
     facet_wrap(~ R0_fac, scales = "fixed", ncol = 2) + 
     labs(x = "Average duration of immunity (years)", y = "Estimate SE", title = s)
   print(pl)
   
-  pl <- ggplot(data = sim_reg_long %>% filter(name == s), 
+  pl <- ggplot(data = sim_reg_all_long %>% filter(name == s, model == model_cur), 
                mapping = aes(x = factor(round(R0, 2)), y = value)) + 
     geom_boxplot() + 
     facet_wrap(~ factor(1 / alpha / 52), scales = "fixed", ncol = 2) + 
@@ -294,34 +345,37 @@ for(s in svars_plot) {
   print(pl)
 }
 
-# Correlation between s(time) and R2
-pl <- ggplot(data = sim_reg, 
-             mapping = aes(x = R2, y = rho_sTime_logSI, 
-                           color = abs(e_Te - parms["e_Te"]) + abs(e_RH - parms["e_RH"]))) + 
-  geom_point(alpha = 0.5) + 
-  scale_color_viridis(option = "rocket", direction = -1) + 
-  theme(legend.position = "top") + 
-  labs(x = "R2", y = "rho(sTime, log_SI)", color = "B(Te) + B(RH)", 
-       title = "Association between smooth(time) and R2")
-print(pl)
-
-pl <- ggplot(data = sim_reg, 
+pl <- ggplot(data = sim_reg_all %>% filter(model == model_cur), 
              mapping = aes(x = R2, y = abs(e_Te - parms["e_Te"]) + abs(e_RH - parms["e_RH"]))) + 
   geom_point(color = "grey", alpha = 1) + 
   theme_classic() + 
   labs(x = "R2", y = "B(Te) + B(RH)", title = "Total absolute bias vs. R2")
 print(pl)
 
-pl <- ggplot(data = sim_reg, 
-             mapping = aes(x = rho_sTime_logSI, y = abs(e_Te - parms["e_Te"]) + abs(e_RH - parms["e_RH"]))) + 
-  geom_point(color = "grey", alpha = 1) + 
-  theme_classic() + 
-  labs(x = "rho(sTime, log_SI)", y = "B(Te) + B(RH)", title = "Total absolute bias vs. rho(sTime, log_SI)")
-print(pl)
+# Correlation between s(time) and R2
+
+if(model_cur == "smooth") {
+  pl <- ggplot(data = sim_reg_all %>% filter(model == model_cur), 
+               mapping = aes(x = R2, y = rho_sTime_logSI, 
+                             color = abs(e_Te - parms["e_Te"]) + abs(e_RH - parms["e_RH"]))) + 
+    geom_point(alpha = 0.5) + 
+    scale_color_viridis(option = "rocket", direction = -1) + 
+    theme(legend.position = "top") + 
+    labs(x = "R2", y = "rho(sTime, log_SI)", color = "B(Te) + B(RH)", 
+         title = "Association between smooth(time) and R2")
+  print(pl)
+  
+  pl <- ggplot(data = sim_reg_all %>% filter(model == model_cur), 
+               mapping = aes(x = rho_sTime_logSI, y = abs(e_Te - parms["e_Te"]) + abs(e_RH - parms["e_RH"]))) + 
+    geom_point(color = "grey", alpha = 1) + 
+    theme_classic() + 
+    labs(x = "rho(sTime, log_SI)", y = "B(Te) + B(RH)", title = "Total absolute bias vs. rho(sTime, log_SI)")
+  print(pl)
+}
 
 # Estimation performance --------------------------------------------------
-est_perf <- sim_reg %>% 
-  group_by(.id, eps, R0, alpha) %>% 
+est_perf <- sim_reg_all %>% 
+  group_by(model, .id, eps, R0, alpha) %>% 
   summarise(e_Te_bias_mean = mean(abs(e_Te - parms["e_Te"])),
             e_Te_bias_sd = sd(abs(e_Te - parms["e_Te"])), 
             e_Te_se_mean = mean(e_Te_se), 
@@ -336,7 +390,7 @@ est_perf <- sim_reg %>%
             R2_mean = mean(R2), 
             R2_sd = sd(R2)) %>% 
   ungroup() %>% 
-  arrange(alpha, R0)
+  arrange(model, alpha, R0)
 
 # Make main figures -------------------------------------------------------
 
@@ -355,7 +409,7 @@ pl <- ggplot(data = clim_dat_long %>% filter(var %in% c("Te_norm", "RH_pred_norm
   labs(x = "Week no", y = "Renormalized value", color = "")
 print(pl)
 
-# Individual plots of Te, RH, and beta_seas
+# Panel A: Individual plots of Te, RH, and beta_seas
 tmp <- clim_dat_long %>% 
   filter(var %in% c("Te_norm", "RH_pred_norm", "beta_seas"), week_no >= 1) %>% 
   mutate(var = factor(var, 
@@ -363,8 +417,8 @@ tmp <- clim_dat_long %>%
                       labels = c("Temperature", "Relative humidity", "Transmission rate")))
 
 pl_A <- ggplot(data = tmp, 
-                  mapping = aes(x = week_no, 
-                                y = value)) + 
+               mapping = aes(x = week_no, 
+                             y = value)) + 
   geom_line() + 
   geom_vline(xintercept = 52 * (0:10) + 1, color = "grey", alpha = 0.5) + 
   facet_wrap(~ var, ncol = 1, scales = "free_y") + 
@@ -375,7 +429,7 @@ pl_A <- ggplot(data = tmp,
   labs(x = "Time (weeks)", y = "Renormalized value")
 print(pl_A)
 
-# Plot of CC and S
+# PANEL B: Plot of CC and S
 tmp <- sim_long %>% 
   filter(1 / alpha == 52, state_var %in% c("S", "CC")) %>% 
   mutate(state_var = factor(state_var, levels = c("CC", "S"), 
@@ -385,7 +439,7 @@ levels(tmp$R0) <- paste0("R0 = ", levels(tmp$R0))
 
 
 pl_B <- ggplot(data = tmp, 
-                   mapping = aes(x = week_no, y = 1e2 * value / N, linetype = state_var)) + 
+               mapping = aes(x = week_no, y = 1e2 * value / N, linetype = state_var)) + 
   geom_line(linewidth = 0.5) + 
   facet_wrap(~factor(R0), scales = "free_y", ncol = 1) + 
   scale_y_sqrt() + 
@@ -401,13 +455,14 @@ pl_B <- ggplot(data = tmp,
   labs(x = "Time (weeks)", y = "Value", color = expression(R[0]), linetype = "")
 print(pl_B)
 
-tmp <- sim_reg %>% 
-  filter(1 / alpha == 52) %>% 
+tmp <- sim_reg_all %>% 
+  filter(1 / alpha == 52, model == "smooth") %>% 
   mutate(R0 = factor(R0))
 levels(tmp$R0) <- paste0("R0 = ", levels(tmp$R0))
 
+# PANEL C: distribution of estimates
 pl_C <- ggplot(data = tmp, 
-             mapping = aes(x = e_Te, color = e_Te_se)) + 
+               mapping = aes(x = e_Te, color = e_Te_se)) + 
   geom_vline(xintercept = parms["e_Te"], linetype = "dotted") + 
   geom_density() + 
   geom_rug(alpha = 1) + 
@@ -439,48 +494,75 @@ if(save_plot) {
          height = 8)
 }
 
-# FIGURE 2: Parameter estimates from regression ---------------------------------------------------------------
-tmp <- sim_reg %>% 
-  filter(1 / alpha == 52) %>% 
-  rename("Te" = "e_Te", "RH" = "e_RH") %>% 
-  pivot_longer(cols = c("Te", "RH"), names_to = "var", values_to = "est")
-  
-pl <- ggplot(data = sim_reg %>% filter(1 / alpha == 52), 
-             mapping = aes(x = e_Te, y = e_Te_se, shape = factor(R0))) + 
-  geom_vline(xintercept = parms["e_Te"], linetype = "dotted") + 
-  geom_point() + 
-  #geom_xsidedensity(mapping = aes(y = stat(density))) + 
-  #facet_wrap(~ factor(R0)) + 
-  scale_color_viridis(option = "turbo", direction = -1) +
-  theme_classic() + 
-  theme(legend.position = "top") + 
-  labs(x = "Point estimate of temperature effect", y = "Standard error of estimate", 
-       color = expression(R^2), shape = expression(R[0]))
-print(pl)
+# SUP FIGURE: Distribution of estimates for all models  --------------------------------------------------------------
+tmp <- sim_reg_all_long %>% 
+  filter(1 / alpha == 52, name %in% c("e_Te", "e_RH")) %>% 
+  mutate(name = factor(name, levels = c("e_Te", "e_RH"), labels = c("Temperature", "Relative humidity")), 
+         model = factor(model, 
+                        levels = c("true", "smooth", "autocorr"), 
+                        labels = c("Exact model", "Model with smooth term", "Model with AC term")))
 
-pl2 <- ggplot(data = sim_reg %>% filter(1 / alpha == 52), 
-             mapping = aes(x = e_RH, y = e_RH_se, shape = factor(R0))) + 
-  geom_vline(xintercept = parms["e_RH"], linetype = "dotted") + 
-  geom_point() + 
-  #facet_wrap(~ factor(R0)) + 
-  scale_color_viridis(option = "turbo", direction = -1) +
+pl <- ggplot(data = tmp, mapping = aes(x = value, fill = factor(R0))) + 
+  geom_vline(xintercept = parms["e_Te"], linetype = "dotted") + 
+  geom_density(alpha = 0.5) + 
+  facet_grid(model ~ name, scales = "free_x") + 
+  #scale_fill_viridis(option = "turbo", direction = 1, discrete = T) + 
+  scale_fill_brewer(palette = "Spectral", direction = -1) + 
   theme_classic() + 
-  theme(legend.position = "top") + 
-  labs(x = "Point estimate of relative humidity effect", y = "Standard error of estimate", 
-       color = expression(R^2), shape = expression(R[0]))
-print(pl2)
+  theme(strip.background = element_blank(), 
+        legend.position = c(0.5, 0.5)) + 
+  labs(x = "Point estimate", y = "Density", fill = expression(R[0]))
+print(pl)
 
 if(save_plot) {
   ggsave(plot = pl, 
-         filename = sprintf("_figures/_main/vignette-descendant-bias-main-%s-Te.pdf", loc_nm), 
-         width = 8, 
-         height = 8)
-  
-  ggsave(plot = pl2, 
-         filename = sprintf("_figures/_main/vignette-descendant-bias-main-%s-RH.pdf", loc_nm), 
+         filename = sprintf("_figures/_main/vignette-descendant-bias-main-all_estimates-%s.pdf", loc_nm), 
          width = 8, 
          height = 8)
 }
+
+# FIGURE 2: Parameter estimates from regression ---------------------------------------------------------------
+# tmp <- sim_reg %>% 
+#   filter(1 / alpha == 52) %>% 
+#   rename("Te" = "e_Te", "RH" = "e_RH") %>% 
+#   pivot_longer(cols = c("Te", "RH"), names_to = "var", values_to = "est")
+# 
+# pl <- ggplot(data = sim_reg %>% filter(1 / alpha == 52), 
+#              mapping = aes(x = e_Te, y = e_Te_se, shape = factor(R0))) + 
+#   geom_vline(xintercept = parms["e_Te"], linetype = "dotted") + 
+#   geom_point() + 
+#   #geom_xsidedensity(mapping = aes(y = stat(density))) + 
+#   #facet_wrap(~ factor(R0)) + 
+#   scale_color_viridis(option = "turbo", direction = -1) +
+#   theme_classic() + 
+#   theme(legend.position = "top") + 
+#   labs(x = "Point estimate of temperature effect", y = "Standard error of estimate", 
+#        color = expression(R^2), shape = expression(R[0]))
+# print(pl)
+# 
+# pl2 <- ggplot(data = sim_reg %>% filter(1 / alpha == 52), 
+#               mapping = aes(x = e_RH, y = e_RH_se, shape = factor(R0))) + 
+#   geom_vline(xintercept = parms["e_RH"], linetype = "dotted") + 
+#   geom_point() + 
+#   #facet_wrap(~ factor(R0)) + 
+#   scale_color_viridis(option = "turbo", direction = -1) +
+#   theme_classic() + 
+#   theme(legend.position = "top") + 
+#   labs(x = "Point estimate of relative humidity effect", y = "Standard error of estimate", 
+#        color = expression(R^2), shape = expression(R[0]))
+# print(pl2)
+# 
+# if(save_plot) {
+#   ggsave(plot = pl, 
+#          filename = sprintf("_figures/_main/vignette-descendant-bias-main-%s-Te.pdf", loc_nm), 
+#          width = 8, 
+#          height = 8)
+#   
+#   ggsave(plot = pl2, 
+#          filename = sprintf("_figures/_main/vignette-descendant-bias-main-%s-RH.pdf", loc_nm), 
+#          width = 8, 
+#          height = 8)
+# }
 
 # End statements ----------------------------------------------------------
 if(save_plot) dev.off()

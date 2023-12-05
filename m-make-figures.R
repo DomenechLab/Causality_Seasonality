@@ -9,15 +9,15 @@ source("f-Pred_RH.R")
 Pred_RH <- Vectorize(FUN = Pred_RH)
 source("f-CreateClimData.R")
 theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
-save_plot <- F # Should all the plots be saved as a pdf? 
+save_plot <- T # Should all the plots be saved as a pdf? 
 
 #######################################################################################################
 # VIGNETTE ON QUASI-EXPERIMENTS
 #######################################################################################################
 
 # Load climatic data ------------------------------------------------------
-loc_df <- data.frame(loc_nm = c("Bogota", "Pasto", "Rostock"), 
-                     airport_code = c("SKBO", "SKPS", "Rostock"))
+loc_df <- data.frame(loc_nm = c("Bogota", "Lübeck"), 
+                     airport_code = c("SKBO", "Rostock"))
 
 clim_dat <- vector(mode = "list", length = nrow(loc_df))
 names(clim_dat) <- loc_df$loc_nm
