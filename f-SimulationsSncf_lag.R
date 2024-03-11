@@ -2,17 +2,17 @@
 # Obtain sncf for simulations from the models in different locations 
 #######################################################################################################
 
-fun_SimulationsSncf_lag <- function(sim_id = 1, reference = "SKRH") {
+fun_SimulationsSncf_lag <- function(data_sim_l = simulations_l, set_id = 1, reference = "SKRH") {
   # Args: 
-  # sim_id: Id of the simulation (id)
+  # set_id: Id of the simulation (id)
   # reference: Loc of reference (string)
   # Return: 
   # Data, results and plot sncf (list)
   
   # Prepare the data to wide
-  sncf_df <- bind_rows(simulations_l) %>%
+  sncf_df <- bind_rows(data_sim_l) %>%
     filter(state_var == "CC_obs") %>%
-    filter(.id == sim_id) %>%
+    filter(.id == set_id) %>%
     mutate(inc = value/N) %>% 
     select(loc, week_no, inc) %>%
     arrange(week_no) %>%
@@ -21,7 +21,7 @@ fun_SimulationsSncf_lag <- function(sim_id = 1, reference = "SKRH") {
   
   # Estimate the pair-wise (cross-)correlation function from reference 
   ccf_l <- list()
-  for (i in names(simulations_l)) {
+  for (i in names(data_sim_l)) {
     ccf_l[["lag"]] <- ccf(sncf_df[[reference]], sncf_df[[i]], lag.max = 35)$lag
     ccf_l[[i]] <- ccf(sncf_df[[reference]], sncf_df[[i]], lag.max = 35)$acf
     }
@@ -47,27 +47,16 @@ fun_SimulationsSncf_lag <- function(sim_id = 1, reference = "SKRH") {
   
     # Calculate distance from reference 
     # Calculate distance from more distant
-    if(country_name == "Colombia") reference <- "SKRH"
-    if(country_name == "Spain") reference <- "LEZL"
-  
+    library(geosphere)
     lim_lat <- unlist(filter(ccf_max, loc == reference)[,"lat"])
     lim_lon <- unlist(filter(ccf_max, loc == reference)[,"lon"])
-
-    library(geosphere)
-    
-    distm(select(ccf_max, lon, lat), c(lim_lon, lim_lat), fun = distGeo)/1000
-    
     ccf_max <- ccf_max %>%
-      #mutate(dis_km = sqrt((lat_km - lim_lat)^2+(lon_km  - lim_lon)^2)) 
       mutate(dis_km = c(distm(select(ccf_max, lon, lat), c(lim_lon, lim_lat), fun = distGeo)/1000))
     
     # Calculate speed 
-    # mod <- lm(lag ~ dis_km, data = ccf_max)
-    # ccf_speed <- list(mean = (1/coef(mod)[[2]])*4,
-    #                   sd = (1/coef(mod)[[2]])*4 - (1/(coef(mod)[[2]] + sqrt(diag(vcov(mod)))[[2]]))*4) #km/mo
     library(brms)
     library(tidybayes) 
-    mod <- brms::brm(lag ~ dis_km, data = ccf_max)
+    mod <- brm(lag ~ dis_km, data = ccf_max)
     get_variables(mod)
     ccf_speed <- mod %>%
       spread_draws(b_dis_km) %>%
