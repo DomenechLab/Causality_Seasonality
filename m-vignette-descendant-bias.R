@@ -15,7 +15,7 @@ source("s-base_packages.R")
 library("mgcv")
 library("pomp")
 theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
-save_plot <- T # Should all the plots be saved as a pdf? 
+save_plot <- F # Should all the plots be saved as a pdf? 
 
 # Set model parameters ----------------------------------------------------
 parms <- c("mu" = 1 / 80 / 52, # Birth rate 
@@ -210,47 +210,65 @@ f_reg <- function(df, model_nm = "smooth_time") {
   # Add lagged time series of observations
   df <- df %>% 
     arrange(week_no) %>% 
-    mutate(log_CC_obs_lag = lag(CC_obs, n = 1, order_by = week_no) %>% log1p(), 
-           log_S_lag = lag(S, n = 1, order_by = week_no) %>% log(), 
-           log_I_lag = lag(I, n = 1, order_by = week_no) %>% log())
+    mutate(log_CC_obs_lag = lag(CC_obs, n = 1, order_by = week_no) %>% log1p(), # CC^O(t-1)
+           Re_obs = c(NA, exp(diff(log(CC_obs)))), # Re(t-1)
+           log_S_lag = lag(S, n = 1, order_by = week_no) %>% log(), # log(S(t-1))
+           log_I_lag = lag(I, n = 1, order_by = week_no) %>% log()) # log(I(t-1))
   
-  # Covariates always included
-  #covars_mod <- c("1", "Te_norm_lag")
-  covars_mod <- c("1", "Te_norm_lag", "RH_pred_norm_lag")
+  # List of covariates
   
-  # Other covariates
   if(model_nm == "true") {
-    covars_mod <- c(covars_mod, c("log_S_lag", "log_I_lag"))
+    covars_mod <- c("1", "Te_norm_lag", "RH_pred_norm_lag", "log_S_lag", "log_I_lag")
+  } else if(model_nm == "true_Re") {
+    covars_mod <- c("1", "Te_norm_lag", "RH_pred_norm_lag", "log_S_lag")
   } else if(model_nm == "smooth") {
-    covars_mod <- c(covars_mod, "s(week_no, k = 50)")
+    covars_mod <- c("1", "Te_norm_lag", "RH_pred_norm_lag", "s(week_no, k = 50)")
   } else if(model_nm == "autocorr") {
-    covars_mod <- c(covars_mod, "log_CC_obs_lag")
+    covars_mod <- c("1", "Te_norm_lag", "RH_pred_norm_lag", "log_CC_obs_lag")
+  } else if(model_nm == "smooth_Re") {
+    covars_mod <- c("1", "Te_norm_lag", "RH_pred_norm_lag", "s(week_no, k = 50)")
+  } else {
+    error("Wrong model name specified")
   }
   
   # Formula
-  form_mod <- reformulate(termlabels = covars_mod, response = "CC_obs", intercept = T)
+  form_mod <- reformulate(termlabels = covars_mod, 
+                          response = ifelse(str_detect(model_nm, "_Re"), "log(Re_obs)", "CC_obs"),
+                          intercept = T)
   
   # Run GAM model
-  M_nb <- gam(formula = form_mod, 
-              family = nb(link = "log"), 
-              data = df)
+  if(str_detect(model_nm, "_Re")) {
+    # Outcome: log(Re_obs), model: Normal with identity link
+    M_reg <- gam(formula = form_mod, 
+                 #family = scat(link = "identity"),
+                 family = gaussian(link = "identity"), 
+                 data = filter(df, !is.na(Re_obs), !is.infinite(Re_obs), Re_obs > 0))
+    
+  } else {
+    # Outcome: CC_obs, model: Negative Binomial with log-link
+    M_reg <- gam(formula = form_mod, 
+                family = nb(link = "log"), 
+                data = df)
+  }
   
   # Extract regression coefficients
-  M_est <- coef(M_nb)
-  M_est_se <- summary(M_nb)$se
-  R2 <- summary(M_nb)$r.sq
+  M_est <- coef(M_reg)
+  M_est_se <- summary(M_reg)$se
+  R2 <- summary(M_reg)$r.sq
   
   # Return
-  out <- data.frame(e_Te = M_est["Te_norm_lag"], 
-                    e_Te_se = M_est_se["Te_norm_lag"], 
-                    e_RH = M_est["RH_pred_norm_lag"], 
-                    e_RH_se = M_est_se["RH_pred_norm_lag"],
+  out <- data.frame(e_Te = M_est[str_detect(names(M_est), "Te_norm")], 
+                    e_Te_se = M_est_se[str_detect(names(M_est_se), "Te_norm")], 
+                    e_RH = M_est[str_detect(names(M_est), "RH_pred_norm")], 
+                    e_RH_se = M_est_se[str_detect(names(M_est_se), "RH_pred_norm")],
                     R2 = R2)
+  
+  #browser()
   
   if(model_nm == "smooth") {
     
     # Correlation between smooth(time) and log(S*I)
-    s_time <- predict(object = M_nb, type = "terms")
+    s_time <- predict(object = M_reg, type = "terms")
     s_time <- s_time[, "s(week_no)"]
     log_SI <- log(df$S * df$I)
     rho <- cor(x = s_time, y = log_SI, method = "pearson")
@@ -262,15 +280,35 @@ f_reg <- function(df, model_nm = "smooth_time") {
   return(out)
 }
 
+# Test regression on one simulated set ------------------------------------
+df_test <- sims_all %>% 
+  filter(.id == 1, rep == 1) %>% 
+  arrange(week_no) %>% 
+  mutate(Re_obs = c(NA, exp(diff(log(CC_obs)))), 
+         log_CC_obs_lag = lag(CC_obs, n = 1, order_by = week_no) %>% log1p(),
+         log_S_lag = lag(S, n = 1, order_by = week_no) %>% log(), 
+         log_I_lag = lag(I, n = 1, order_by = week_no) %>% log()) %>% 
+  filter(!is.na(Re_obs), !is.infinite(Re_obs), Re_obs > 0)
+
+pl <- ggplot(data = df_test, mapping = aes(x = week_no, y = Re_obs)) + 
+  geom_line() + 
+  geom_hline(yintercept = 1, linetype = "dashed") + 
+  scale_y_sqrt() + 
+  labs(x = "Week", y = "Effective reproduction number")
+print(pl)
+
+M_test <- f_reg(df = df_test, model_nm = "smooth_Re")
+
 # Run regressions ---------------------------------------------------------
 
 # List all models
-model_nm <- c("true", "smooth", "autocorr")
+model_nm <- c("true", "smooth", "autocorr", "true_Re", "smooth_Re")
 sim_reg_all <- vector(mode = "list", length = length(model_nm))
 names(sim_reg_all) <- model_nm
 
 # Run regressions
 for(i in seq_along(model_nm)) {
+  print(model_nm[i])
   sim_reg_all[[i]] <- bake(file = sprintf("_saved/_vignette_descendent_bias/vignette-descendant-bias-regressions-%s-%s.rds", loc_nm, model_nm[i]), 
                            seed = 2186L, 
                            expr = {
@@ -290,7 +328,7 @@ sim_reg_all_long <- sim_reg_all %>%
 
 # Plots -------------------------------------------------------------------
 
-model_cur <- "smooth" # Name of model to plot
+model_cur <- "smooth_Re" # Name of model to plot
 
 # Plot point estimates; x-axis: waning rate, panels: R0
 svars_plot <- c("e_Te", "e_RH", "R2")
@@ -494,9 +532,9 @@ if(save_plot) {
          height = 8)
 }
 
-# SUP FIGURE: Distribution of estimates for all models  --------------------------------------------------------------
+# SUP FIGURE: Distribution of estimates for all models with CC as outcome  --------------------------------------------------------------
 tmp <- sim_reg_all_long %>% 
-  filter(1 / alpha == 52, name %in% c("e_Te", "e_RH")) %>% 
+  filter(1 / alpha == 52, name %in% c("e_Te", "e_RH"), model %in% c("true", "smooth", "autocorr")) %>% 
   mutate(name = factor(name, levels = c("e_Te", "e_RH"), labels = c("Temperature", "Relative humidity")), 
          model = factor(model, 
                         levels = c("true", "smooth", "autocorr"), 
@@ -516,7 +554,34 @@ print(pl)
 
 if(save_plot) {
   ggsave(plot = pl, 
-         filename = sprintf("_figures/_main/vignette-descendant-bias-main-all_estimates-%s.pdf", loc_nm), 
+         filename = sprintf("_figures/_main/vignette-descendant-bias-main-all_estimates-CC-%s.pdf", loc_nm), 
+         width = 8, 
+         height = 8)
+}
+
+# SUP FIGURE: Distribution of estimates for all models with Re as outcome  --------------------------------------------------------------
+tmp <- sim_reg_all_long %>% 
+  filter(1 / alpha == 52, name %in% c("e_Te", "e_RH"), model %in% c("true_Re", "smooth_Re")) %>% 
+  mutate(name = factor(name, levels = c("e_Te", "e_RH"), labels = c("Temperature", "Relative humidity")), 
+         model = factor(model, 
+                        levels = c("true_Re", "smooth_Re"), 
+                        labels = c("Exact model", "Model with smooth term")))
+
+pl <- ggplot(data = tmp, mapping = aes(x = value, fill = factor(R0))) + 
+  geom_vline(xintercept = parms["e_Te"], linetype = "dotted") + 
+  geom_density(alpha = 0.5) + 
+  facet_grid(model ~ name, scales = "free_x") + 
+  #scale_fill_viridis(option = "turbo", direction = 1, discrete = T) + 
+  scale_fill_brewer(palette = "Spectral", direction = -1) + 
+  theme_classic() + 
+  theme(strip.background = element_blank(), 
+        legend.position = c(0.5, 0.5)) + 
+  labs(x = "Point estimate", y = "Density", fill = expression(R[0]))
+print(pl)
+
+if(save_plot) {
+  ggsave(plot = pl, 
+         filename = sprintf("_figures/_main/vignette-descendant-bias-main-all_estimates-Re-%s.pdf", loc_nm), 
          width = 8, 
          height = 8)
 }
