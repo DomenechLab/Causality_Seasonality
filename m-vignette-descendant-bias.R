@@ -15,7 +15,7 @@ source("s-base_packages.R")
 library("mgcv")
 library("pomp")
 theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
-save_plot <- F # Should all the plots be saved as a pdf? 
+save_plot <- T # Should all the plots be saved as a pdf? 
 
 # Set model parameters ----------------------------------------------------
 parms <- c("mu" = 1 / 80 / 52, # Birth rate 
@@ -240,7 +240,6 @@ f_reg <- function(df, model_nm = "smooth_time") {
   if(str_detect(model_nm, "_Re")) {
     # Outcome: log(Re_obs), model: Normal with identity link
     M_reg <- gam(formula = form_mod, 
-                 #family = scat(link = "identity"),
                  family = gaussian(link = "identity"), 
                  data = filter(df, !is.na(Re_obs), !is.infinite(Re_obs), Re_obs > 0))
     
@@ -532,13 +531,14 @@ if(save_plot) {
          height = 8)
 }
 
-# SUP FIGURE: Distribution of estimates for all models with CC as outcome  --------------------------------------------------------------
+# SUP FIGURE: Distribution of estimates for all models with CC and Re as outcomes  --------------------------------------------------------------
 tmp <- sim_reg_all_long %>% 
-  filter(1 / alpha == 52, name %in% c("e_Te", "e_RH"), model %in% c("true", "smooth", "autocorr")) %>% 
+  filter(1 / alpha == 52, name %in% c("e_Te", "e_RH"), model %in% c("true", "smooth", "autocorr", "smooth_Re")) %>% 
   mutate(name = factor(name, levels = c("e_Te", "e_RH"), labels = c("Temperature", "Relative humidity")), 
          model = factor(model, 
-                        levels = c("true", "smooth", "autocorr"), 
-                        labels = c("Exact model", "Model with smooth term", "Model with AC term")))
+                        levels = c("true", "autocorr", "smooth", "smooth_Re"), 
+                        labels = c("Exact model (CC)", "Model with AC term (CC)", 
+                                   "Model with smooth term (CC)", "Model with smooth term (Re)")))
 
 pl <- ggplot(data = tmp, mapping = aes(x = value, fill = factor(R0))) + 
   geom_vline(xintercept = parms["e_Te"], linetype = "dotted") + 
@@ -548,13 +548,13 @@ pl <- ggplot(data = tmp, mapping = aes(x = value, fill = factor(R0))) +
   scale_fill_brewer(palette = "Spectral", direction = -1) + 
   theme_classic() + 
   theme(strip.background = element_blank(), 
-        legend.position = c(0.5, 0.5)) + 
-  labs(x = "Point estimate", y = "Density", fill = expression(R[0]))
+        legend.position = c(0.5, 0.8)) + 
+  labs(x = "Estimates", y = "Density", fill = expression(R[0]))
 print(pl)
 
 if(save_plot) {
   ggsave(plot = pl, 
-         filename = sprintf("_figures/_main/vignette-descendant-bias-main-all_estimates-CC-%s.pdf", loc_nm), 
+         filename = sprintf("_figures/_main/vignette-descendant-bias-main-all_estimates-%s.pdf", loc_nm), 
          width = 8, 
          height = 8)
 }
