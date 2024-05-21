@@ -15,7 +15,7 @@ source("s-base_packages.R")
 library("mgcv")
 library("pomp")
 theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
-save_plot <- T # Should all the plots be saved as a pdf? 
+save_plot <- F # Should all the plots be saved as a pdf? 
 
 # Set model parameters ----------------------------------------------------
 parms <- c("mu" = 1 / 80 / 52, # Birth rate 
@@ -194,8 +194,11 @@ sims_all <- sims_all %>%
   select(.id, rep, week_no, everything()) %>% 
   left_join(y = all_parms) %>% 
   left_join(y = clim_dat %>% select(week_no, matches("Te_norm|RH_pred_norm"), beta_seas)) %>% 
-  arrange(.id, rep, week_no)
-
+  arrange(.id, rep, week_no) %>% 
+  group_by(.id, rep) %>% 
+  mutate(Re = c(NA, exp(diff(log(CC)))), # True Re(t-1)
+         Re_obs = rlnorm(n = length(Re), meanlog = log(Re), sdlog = 0.1)) %>% # Observed Re(t-1)
+  ungroup()
 
 # Function to run GAM regression model ------------------------------------
 f_reg <- function(df, model_nm = "smooth_time") {
@@ -211,7 +214,6 @@ f_reg <- function(df, model_nm = "smooth_time") {
   df <- df %>% 
     arrange(week_no) %>% 
     mutate(log_CC_obs_lag = lag(CC_obs, n = 1, order_by = week_no) %>% log1p(), # CC^O(t-1)
-           Re_obs = c(NA, exp(diff(log(CC_obs)))), # Re(t-1)
            log_S_lag = lag(S, n = 1, order_by = week_no) %>% log(), # log(S(t-1))
            log_I_lag = lag(I, n = 1, order_by = week_no) %>% log()) # log(I(t-1))
   
@@ -227,6 +229,8 @@ f_reg <- function(df, model_nm = "smooth_time") {
     covars_mod <- c("1", "Te_norm_lag", "RH_pred_norm_lag", "log_CC_obs_lag")
   } else if(model_nm == "smooth_Re") {
     covars_mod <- c("1", "Te_norm_lag", "RH_pred_norm_lag", "s(week_no, k = 50)")
+  } else if(model_nm == "nothing") {
+    covars_mod <- c("1", "Te_norm_lag", "RH_pred_norm_lag")
   } else {
     error("Wrong model name specified")
   }
@@ -246,8 +250,8 @@ f_reg <- function(df, model_nm = "smooth_time") {
   } else {
     # Outcome: CC_obs, model: Negative Binomial with log-link
     M_reg <- gam(formula = form_mod, 
-                family = nb(link = "log"), 
-                data = df)
+                 family = nb(link = "log"), 
+                 data = df)
   }
   
   # Extract regression coefficients
@@ -280,23 +284,24 @@ f_reg <- function(df, model_nm = "smooth_time") {
 }
 
 # Test regression on one simulated set ------------------------------------
-df_test <- sims_all %>% 
-  filter(.id == 1, rep == 1) %>% 
-  arrange(week_no) %>% 
-  mutate(Re_obs = c(NA, exp(diff(log(CC_obs)))), 
-         log_CC_obs_lag = lag(CC_obs, n = 1, order_by = week_no) %>% log1p(),
-         log_S_lag = lag(S, n = 1, order_by = week_no) %>% log(), 
-         log_I_lag = lag(I, n = 1, order_by = week_no) %>% log()) %>% 
-  filter(!is.na(Re_obs), !is.infinite(Re_obs), Re_obs > 0)
 
-pl <- ggplot(data = df_test, mapping = aes(x = week_no, y = Re_obs)) + 
+df_test <- sims_all %>% 
+  filter(.id == 9, rep == 1) %>% 
+  arrange(week_no) %>% 
+  mutate(log_CC_obs_lag = lag(CC_obs, n = 1, order_by = week_no) %>% log1p(),
+         log_S_lag = lag(S, n = 1, order_by = week_no) %>% log(), 
+         log_I_lag = lag(I, n = 1, order_by = week_no) %>% log())
+  #filter(!is.na(Re_obs), !is.infinite(Re_obs), Re_obs > 0)
+
+pl <- ggplot(data = df_test, mapping = aes(x = week_no, y = Re)) + 
   geom_line() + 
+  geom_line(mapping = aes(x = week_no, y = Re_obs), color = "red") + 
   geom_hline(yintercept = 1, linetype = "dashed") + 
   scale_y_sqrt() + 
   labs(x = "Week", y = "Effective reproduction number")
 print(pl)
 
-M_test <- f_reg(df = df_test, model_nm = "smooth_Re")
+M_test <- f_reg(df = df_test, model_nm = "true_Re")
 
 # Run regressions ---------------------------------------------------------
 
@@ -533,11 +538,13 @@ if(save_plot) {
 
 # SUP FIGURE: Distribution of estimates for all models with CC and Re as outcomes  --------------------------------------------------------------
 tmp <- sim_reg_all_long %>% 
-  filter(1 / alpha == 52, name %in% c("e_Te", "e_RH"), model %in% c("true", "smooth", "autocorr", "smooth_Re")) %>% 
-  mutate(name = factor(name, levels = c("e_Te", "e_RH"), labels = c("Temperature", "Relative humidity")), 
+  filter(1 / alpha == 52, name %in% c("e_Te", "e_RH"), model %in% c("true", "true_Re", "smooth", "autocorr", "smooth_Re")) %>% 
+  mutate(name = factor(name, levels = c("e_Te", "e_RH"), 
+                       labels = c("Temperature", "Relative humidity")), 
          model = factor(model, 
-                        levels = c("true", "autocorr", "smooth", "smooth_Re"), 
-                        labels = c("Exact model (CC)", "Model with AC term (CC)", 
+                        levels = c("true", "true_Re", "autocorr", "smooth", "smooth_Re"), 
+                        labels = c("True model (CC)", "True model (Re)",
+                                   "Model with AC term (CC)", 
                                    "Model with smooth term (CC)", "Model with smooth term (Re)")))
 
 pl <- ggplot(data = tmp, mapping = aes(x = value, fill = factor(R0))) + 
@@ -546,6 +553,7 @@ pl <- ggplot(data = tmp, mapping = aes(x = value, fill = factor(R0))) +
   facet_grid(model ~ name, scales = "free_x") + 
   #scale_fill_viridis(option = "turbo", direction = 1, discrete = T) + 
   scale_fill_brewer(palette = "Spectral", direction = -1) + 
+  scale_y_sqrt() + 
   theme_classic() + 
   theme(strip.background = element_blank(), 
         legend.position = c(0.5, 0.8)) + 
@@ -555,36 +563,36 @@ print(pl)
 if(save_plot) {
   ggsave(plot = pl, 
          filename = sprintf("_figures/_main/vignette-descendant-bias-main-all_estimates-%s.pdf", loc_nm), 
-         width = 8, 
-         height = 8)
+         width = 9, 
+         height = 9)
 }
 
 # SUP FIGURE: Distribution of estimates for all models with Re as outcome  --------------------------------------------------------------
-tmp <- sim_reg_all_long %>% 
-  filter(1 / alpha == 52, name %in% c("e_Te", "e_RH"), model %in% c("true_Re", "smooth_Re")) %>% 
-  mutate(name = factor(name, levels = c("e_Te", "e_RH"), labels = c("Temperature", "Relative humidity")), 
-         model = factor(model, 
-                        levels = c("true_Re", "smooth_Re"), 
-                        labels = c("Exact model", "Model with smooth term")))
-
-pl <- ggplot(data = tmp, mapping = aes(x = value, fill = factor(R0))) + 
-  geom_vline(xintercept = parms["e_Te"], linetype = "dotted") + 
-  geom_density(alpha = 0.5) + 
-  facet_grid(model ~ name, scales = "free_x") + 
-  #scale_fill_viridis(option = "turbo", direction = 1, discrete = T) + 
-  scale_fill_brewer(palette = "Spectral", direction = -1) + 
-  theme_classic() + 
-  theme(strip.background = element_blank(), 
-        legend.position = c(0.5, 0.5)) + 
-  labs(x = "Point estimate", y = "Density", fill = expression(R[0]))
-print(pl)
-
-if(save_plot) {
-  ggsave(plot = pl, 
-         filename = sprintf("_figures/_main/vignette-descendant-bias-main-all_estimates-Re-%s.pdf", loc_nm), 
-         width = 8, 
-         height = 8)
-}
+# tmp <- sim_reg_all_long %>% 
+#   filter(1 / alpha == 52, name %in% c("e_Te", "e_RH"), model %in% c("true_Re", "smooth_Re")) %>% 
+#   mutate(name = factor(name, levels = c("e_Te", "e_RH"), labels = c("Temperature", "Relative humidity")), 
+#          model = factor(model, 
+#                         levels = c("true_Re", "smooth_Re"), 
+#                         labels = c("Exact model", "Model with smooth term")))
+# 
+# pl <- ggplot(data = tmp, mapping = aes(x = value, fill = factor(R0))) + 
+#   geom_vline(xintercept = parms["e_Te"], linetype = "dotted") + 
+#   geom_density(alpha = 0.5) + 
+#   facet_grid(model ~ name, scales = "free_x") + 
+#   #scale_fill_viridis(option = "turbo", direction = 1, discrete = T) + 
+#   scale_fill_brewer(palette = "Spectral", direction = -1) + 
+#   theme_classic() + 
+#   theme(strip.background = element_blank(), 
+#         legend.position = c(0.5, 0.5)) + 
+#   labs(x = "Point estimate", y = "Density", fill = expression(R[0]))
+# print(pl)
+# 
+# if(save_plot) {
+#   ggsave(plot = pl, 
+#          filename = sprintf("_figures/_main/vignette-descendant-bias-main-all_estimates-Re-%s.pdf", loc_nm), 
+#          width = 8, 
+#          height = 8)
+# }
 
 # FIGURE 2: Parameter estimates from regression ---------------------------------------------------------------
 # tmp <- sim_reg %>% 
