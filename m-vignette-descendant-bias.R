@@ -538,14 +538,13 @@ if(save_plot) {
 
 # SUP FIGURE: Distribution of estimates for all models with CC and Re as outcomes  --------------------------------------------------------------
 tmp <- sim_reg_all_long %>% 
-  filter(1 / alpha == 52, name %in% c("e_Te", "e_RH"), model %in% c("true", "true_Re", "smooth", "autocorr", "smooth_Re")) %>% 
+  filter(1 / alpha == 52, name %in% c("e_Te", "e_RH"), model %in% c("true", "true_Re", "smooth", "smooth_Re")) %>% 
   mutate(name = factor(name, levels = c("e_Te", "e_RH"), 
                        labels = c("Temperature", "Relative humidity")), 
          model = factor(model, 
-                        levels = c("true", "true_Re", "autocorr", "smooth", "smooth_Re"), 
-                        labels = c("True model (CC)", "True model (Re)",
-                                   "Model with AC term (CC)", 
-                                   "Model with smooth term (CC)", "Model with smooth term (Re)")))
+                        levels = c("true", "true_Re", "smooth", "smooth_Re"), 
+                        labels = c("True model, C^(O)", "True model, Re^(O)",
+                                   "Model with smooth term, C^(O)", "Model with smooth term, Re^(O)")))
 
 pl <- ggplot(data = tmp, mapping = aes(x = value, fill = factor(R0))) + 
   geom_vline(xintercept = parms["e_Te"], linetype = "dotted") + 
@@ -562,80 +561,10 @@ print(pl)
 
 if(save_plot) {
   ggsave(plot = pl, 
-         filename = sprintf("_figures/_main/vignette-descendant-bias-main-all_estimates-%s.pdf", loc_nm), 
+         filename = sprintf("_figures/_main/vignette-descendant-bias-sup-%s.pdf", loc_nm), 
          width = 9, 
          height = 9)
 }
-
-# SUP FIGURE: Distribution of estimates for all models with Re as outcome  --------------------------------------------------------------
-# tmp <- sim_reg_all_long %>% 
-#   filter(1 / alpha == 52, name %in% c("e_Te", "e_RH"), model %in% c("true_Re", "smooth_Re")) %>% 
-#   mutate(name = factor(name, levels = c("e_Te", "e_RH"), labels = c("Temperature", "Relative humidity")), 
-#          model = factor(model, 
-#                         levels = c("true_Re", "smooth_Re"), 
-#                         labels = c("Exact model", "Model with smooth term")))
-# 
-# pl <- ggplot(data = tmp, mapping = aes(x = value, fill = factor(R0))) + 
-#   geom_vline(xintercept = parms["e_Te"], linetype = "dotted") + 
-#   geom_density(alpha = 0.5) + 
-#   facet_grid(model ~ name, scales = "free_x") + 
-#   #scale_fill_viridis(option = "turbo", direction = 1, discrete = T) + 
-#   scale_fill_brewer(palette = "Spectral", direction = -1) + 
-#   theme_classic() + 
-#   theme(strip.background = element_blank(), 
-#         legend.position = c(0.5, 0.5)) + 
-#   labs(x = "Point estimate", y = "Density", fill = expression(R[0]))
-# print(pl)
-# 
-# if(save_plot) {
-#   ggsave(plot = pl, 
-#          filename = sprintf("_figures/_main/vignette-descendant-bias-main-all_estimates-Re-%s.pdf", loc_nm), 
-#          width = 8, 
-#          height = 8)
-# }
-
-# FIGURE 2: Parameter estimates from regression ---------------------------------------------------------------
-# tmp <- sim_reg %>% 
-#   filter(1 / alpha == 52) %>% 
-#   rename("Te" = "e_Te", "RH" = "e_RH") %>% 
-#   pivot_longer(cols = c("Te", "RH"), names_to = "var", values_to = "est")
-# 
-# pl <- ggplot(data = sim_reg %>% filter(1 / alpha == 52), 
-#              mapping = aes(x = e_Te, y = e_Te_se, shape = factor(R0))) + 
-#   geom_vline(xintercept = parms["e_Te"], linetype = "dotted") + 
-#   geom_point() + 
-#   #geom_xsidedensity(mapping = aes(y = stat(density))) + 
-#   #facet_wrap(~ factor(R0)) + 
-#   scale_color_viridis(option = "turbo", direction = -1) +
-#   theme_classic() + 
-#   theme(legend.position = "top") + 
-#   labs(x = "Point estimate of temperature effect", y = "Standard error of estimate", 
-#        color = expression(R^2), shape = expression(R[0]))
-# print(pl)
-# 
-# pl2 <- ggplot(data = sim_reg %>% filter(1 / alpha == 52), 
-#               mapping = aes(x = e_RH, y = e_RH_se, shape = factor(R0))) + 
-#   geom_vline(xintercept = parms["e_RH"], linetype = "dotted") + 
-#   geom_point() + 
-#   #facet_wrap(~ factor(R0)) + 
-#   scale_color_viridis(option = "turbo", direction = -1) +
-#   theme_classic() + 
-#   theme(legend.position = "top") + 
-#   labs(x = "Point estimate of relative humidity effect", y = "Standard error of estimate", 
-#        color = expression(R^2), shape = expression(R[0]))
-# print(pl2)
-# 
-# if(save_plot) {
-#   ggsave(plot = pl, 
-#          filename = sprintf("_figures/_main/vignette-descendant-bias-main-%s-Te.pdf", loc_nm), 
-#          width = 8, 
-#          height = 8)
-#   
-#   ggsave(plot = pl2, 
-#          filename = sprintf("_figures/_main/vignette-descendant-bias-main-%s-RH.pdf", loc_nm), 
-#          width = 8, 
-#          height = 8)
-# }
 
 # End statements ----------------------------------------------------------
 if(save_plot) dev.off()
