@@ -1,5 +1,52 @@
 
+# Load packages -----------------------------------------------------------
+rm(list = ls())
+source("s-base_packages.R")
+theme_set(theme_classic())
+
+# MAPS =============================================================================================
+# Map of globe
+
+world <- map_data("world")
+colombia <- map_data("world") %>%
+  filter(region == "Colombia")
+
+globe_colombia <- ggplot() +
+  geom_polygon(data = world, aes(x=long, y = lat, group = group), 
+               fill = "grey40") +
+  geom_polygon(data = colombia, aes(x=long, y = lat, group = group), 
+               fill = "firebrick2") + 
+  geom_hline(aes(yintercept = 0), size = 0.5) + 
+  coord_map("ortho", orientation = c(0, -120, 0)) + 
+  theme_minimal() + 
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        panel.grid = element_blank())
+
+germany <- map_data("world") %>%
+  filter(region == "Germany")
+
+globe_germany <- ggplot() +
+  geom_polygon(data = world, aes(x=long, y = lat, group = group), 
+               fill = "grey40") +
+  geom_polygon(data = germany, aes(x=long, y = lat, group = group), 
+               fill = "firebrick2") + 
+  geom_hline(aes(yintercept = 0), size = 0.5) + 
+  coord_map("ortho", orientation = c(0, -40, 0)) + 
+  theme_minimal() + 
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        panel.grid = element_blank())
+
+globe_germany + globe_colombia
+
 # Figure 4 =========================================================================================
+
+sim_long <- readRDS(glue("_saved/_vignette_total_effect/sim_te_effect_Pasto.rds")) %>%
+  bind_rows(readRDS(glue("_saved/_vignette_total_effect/sim_te_effect_Lübeck.rds")), 
+            .id = "loc_tidy_nm") %>%
+  mutate(loc_tidy_nm = case_when(loc_tidy_nm == 1 ~ "Pasto",
+                                 loc_tidy_nm == 2 ~ "Lübeck"))
 
 col <- c("#A7B9CA","#134471")
 
@@ -17,7 +64,8 @@ fun_main_pl <- function(loc = "Pasto", legend = T) {
                        labels = c(expression(paste("Indirect effect (", delta[Te], " = 0, ", delta[RH], " = -0.2)")),
                                   expression(paste("Total effect (", delta[Te], " = -0.2, ", delta[RH], " = -0.2)")))) +
     facet_wrap(.~loc_tidy_nm, scales = "free", ncol = 2) + 
-    theme(legend.position = "top",
+    theme(strip.text = element_text(size = rel(1), colour = "black"),
+          legend.position = "top",
           legend.direction = "vertical",
           legend.justification = "right",
           legend.title.align = 1,
@@ -42,7 +90,8 @@ fun_main_pl <- function(loc = "Pasto", legend = T) {
     scale_y_continuous("Renormalized \n transmission rate") + 
     facet_wrap(Te_effect~., scales = "free", ncol = 4) + 
     scale_color_manual("Effect of temperature", values = col) + 
-    theme(legend.position = "none",
+    theme(strip.text = element_text(size = rel(1), colour = "black"),
+          legend.position = "none",
           strip.background = element_blank(),
           panel.background = element_rect(fill='transparent'),
           plot.background = element_rect(fill='transparent', color=NA),
@@ -58,8 +107,115 @@ pl1 <- fun_main_pl(loc = "Lübeck", legend = F) | fun_main_pl(loc = "Pasto") +
 
 pl1
 
-ggsave(pl1, file = glue("_figures/00_Fig_total-effect.pdf"),
-       height = 7, width = 9)
+# ggsave(pl1, file = glue("_figures/00_Fig_total-effect.pdf"),
+#        height = 7, width = 9)
+
+
+# Figure 3 =========================================================================================
+
+sims_stoch <- readRDS(glue("_presentationfigures/vignette-quasi-experiments-sims_stoch.rds"))
+sims_det <- readRDS(glue("_presentationfigures/vignette-quasi-experiments-sims_det.rds"))
+pars_main <- readRDS(glue("_presentationfigures/vignette-quasi-experiments-pairs_main.rds"))
+id_sims <- readRDS(glue("_presentationfigures/vignette-quasi-experiments-id_sims.rds"))
+
+pl_up_bogota <- ggplot(data = sims_stoch %>% filter(.id %in% id_sims, var == "CC", loc == "Bogota"), 
+                mapping = aes(x = week, y = 1e2 * value / 5e+06, group = .id)) + 
+  geom_line(color = "grey", alpha = 0.5) + 
+  geom_line(data = filter(sims_det, loc == "Bogota"), mapping = aes(x = week, y = 1e2 * CC / 5e+06), color = "black",
+            size = 0.8) +
+  facet_wrap(~ loc, scales = "free_y", nrow = 1) + 
+  theme_classic() + 
+  theme(strip.text = element_text(size = rel(1), colour = "black"),
+        strip.background = element_blank(),
+        panel.background = element_rect(fill='transparent'),
+        plot.background = element_rect(fill='transparent', color=NA),
+        legend.background = element_rect(fill='transparent')) + 
+  labs(x = "Time (weeks)", y = "Total cases \n (per week per 100)")
+print(pl_up_bogota)
+
+pl_up_lubeck <- ggplot(data = sims_stoch %>% filter(.id %in% id_sims, var == "CC", loc == "Lübeck"), 
+                       mapping = aes(x = week, y = 1e2 * value / 5e+06, group = .id)) + 
+  geom_line(color = "grey", alpha = 0.5) + 
+  geom_line(data = filter(sims_det, loc == "Lübeck"), mapping = aes(x = week, y = 1e2 * CC / 5e+06), color = "black",
+            size = 0.8) +
+  facet_wrap(~ loc, scales = "free_y", nrow = 1) + 
+  theme_classic() + 
+  theme(strip.text = element_text(size = rel(1), colour = "black"),
+        strip.background = element_blank(),
+        panel.background = element_rect(fill='transparent'),
+        plot.background = element_rect(fill='transparent', color=NA),
+        legend.background = element_rect(fill='transparent')) + 
+  labs(x = "Time (weeks)", y = "Total cases \n (per week per 100)")
+print(pl_up_lubeck)
+
+pl_low_bogota <- ggplot(data = filter(pars_main, loc == "Bogota"), 
+                 mapping = aes(x = mle, color = par, fill = par, alpha = par)) + 
+  geom_density(adjust = 2, color = "white") + 
+  geom_rug(alpha = 0.7) + 
+  geom_vline(xintercept = -0.2, linetype = "dotted") + 
+  facet_wrap(. ~ par, scales = "free_y", ncol = 2) + 
+  scale_color_manual(values = c("#F2B336", "grey20")) + 
+  scale_fill_manual(values = c("#F2B336", "grey20")) + 
+  scale_alpha_manual(values = c(0.9, 0.4)) + 
+  scale_x_continuous("Parameter estimate", limits = c(-0.5, 0.75)) + 
+  scale_y_continuous("Density", limits = c(0, 10)) + 
+  guides(alpha = "none") + 
+  theme_classic() +
+  theme(strip.text = element_text(size = rel(1), colour = "black"),
+        legend.position = "none",
+        strip.background = element_blank(),
+        panel.background = element_rect(fill='transparent'),
+        plot.background = element_rect(fill='transparent', color=NA),
+        legend.background = element_rect(fill='transparent'))
+print(pl_low_bogota)
+
+pl_low_lubeck <- ggplot(data = filter(pars_main, loc == "Lübeck"), 
+                        mapping = aes(x = mle, color = par, fill = par, alpha = par)) + 
+  geom_density(adjust = 2, color = "white") + 
+  geom_rug(alpha = 0.7) + 
+  geom_vline(xintercept = -0.2, linetype = "dotted") + 
+  facet_wrap(. ~ par, scales = "free_y", ncol = 2) + 
+  scale_color_manual(values = c("#F2B336", "grey20")) + 
+  scale_fill_manual(values = c("#F2B336", "grey20")) + 
+  scale_alpha_manual(values = c(0.9, 0.4)) + 
+  scale_x_continuous("Parameter estimate", limits = c(-0.5, 0.75)) + 
+  scale_y_continuous("Density", limits = c(0, 28)) + 
+  guides(alpha = "none") + 
+  theme_classic() +
+  theme(strip.text = element_text(size = rel(1), colour = "black"),
+        legend.position = "none",
+        strip.background = element_blank(),
+        panel.background = element_rect(fill='transparent'),
+        plot.background = element_rect(fill='transparent', color=NA),
+        legend.background = element_rect(fill='transparent'))
+print(pl_low_lubeck)
+
+# Assemble graph
+(pl_up_bogota / pl_low_bogota) | fun_main_pl(loc = "Pasto", legend = F) 
+
+(pl_up_lubeck / pl_low_lubeck) | fun_main_pl(loc = "Lübeck", legend = F) 
+
+#10*5
+
+pl_all <- pl_up / pl_low
+print(pl_all)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Figure 1 =========================================================================================
 
@@ -156,73 +312,6 @@ ggsave(plot = pl_all,
          filename = "presentation_pl1.svg", 
          width = 10, 
          height = 6)
-
-# Figure 3 =========================================================================================
-
-id_sims <- pomp::freeze(expr = sample(x = 1:max(res_all[[1]]$sim_stoch$.id), size = 10, replace = F), 
-                        seed = 2186L) # random indices for 10 stochastic simulations
-
-sims_stoch <- sims_det <- vector(mode = "list", length = length(loc_df$loc_nm))
-names(sims_stoch) <- names(sims_det) <- loc_df$loc_nm
-
-for(i in seq_along(sims_stoch)) {
-  sims_stoch[[i]] <- res_all[[i]]$sim_stoch
-  sims_det[[i]] <- res_all[[i]]$sim_det
-}
-sims_stoch <- bind_rows(sims_stoch, .id = "loc")
-sims_det <- bind_rows(sims_det, .id = "loc")
-
-pl_up <- ggplot(data = sims_stoch %>% filter(.id %in% id_sims, var == "CC"), 
-                mapping = aes(x = week, y = 1e2 * value / N_val, group = .id)) + 
-  geom_line(color = "grey", alpha = 0.5) + 
-  geom_line(data = sims_det, mapping = aes(x = week, y = 1e2 * CC / N_val), color = "black",
-            size = 0.8) +
-  facet_wrap(~ loc, scales = "free_y", nrow = 1) + 
-  theme_classic() + 
-  theme(strip.text = element_text(size = rel(1), colour = "black"),
-        strip.background = element_blank(),
-        panel.background = element_rect(fill='transparent'),
-        plot.background = element_rect(fill='transparent', color=NA),
-        legend.background = element_rect(fill='transparent')) + 
-  labs(x = "Time (weeks)", y = "Total cases (per week per 100)")
-print(pl_up)
-
-# Lower panels: boxplots of climatic parameter estimates
-pars_main <- vector(mode = "list", length = length(loc_df$loc_nm))
-names(pars_main) <- loc_df$loc_nm
-
-for(i in seq_along(pars_main)) {
-  pars_main[[i]] <- res_all[[i]]$pars_est
-}
-pars_main <- bind_rows(pars_main, .id = "loc")
-
-pars_main <- pars_main %>% 
-  filter(par %in% c("e_Te", "e_RH")) %>% 
-  mutate(par = factor(par, levels = c("e_Te", "e_RH"), labels = c("Temperature", "Relative humidity")))
-
-pl_low <- ggplot(data = pars_main, 
-                 mapping = aes(x = mle, color = loc, fill = loc, alpha = loc)) + 
-  geom_vline(xintercept = pars_true$true[pars_true$par == "e_Te"], linetype = "dotted") + 
-  geom_density(adjust = 2, color = "white") + 
-  geom_rug(alpha = 0.7) + 
-  facet_wrap(~ par, scales = "fixed", ncol = 2) + 
-  scale_color_manual(values = c("#F2B336", "grey20")) + 
-  scale_fill_manual(values = c("#F2B336", "grey20")) + 
-  scale_alpha_manual(values = c(0.9, 0.4)) + 
-  guides(alpha = "none") + 
-  theme_classic() +
-  theme(strip.text = element_text(size = rel(1), colour = "black"),
-        legend.position = c(0.5, 0.8),
-        strip.background = element_blank(),
-        panel.background = element_rect(fill='transparent'),
-        plot.background = element_rect(fill='transparent', color=NA),
-        legend.background = element_rect(fill='transparent')) + 
-  labs(x = "Parameter estimate", y = "Density", color = "", fill = "")
-print(pl_low)
-
-# Assemble graph
-pl_all <- pl_up / pl_low
-print(pl_all)
 
 # Figure 2 =========================================================================================
 

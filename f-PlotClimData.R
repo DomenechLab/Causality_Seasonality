@@ -3,7 +3,7 @@
 ####################################################################################################
 
 fun_PlotClimData = function(loc = names_l[[1]],
-                            country = country_name,
+                            country = coun_name,
                             clim_data_list = TRUE) {
   # Args: 
   # loc: name of weather station for the target location (string)
@@ -50,7 +50,7 @@ fun_PlotClimData = function(loc = names_l[[1]],
   pl5 <- ggplot(data = clim_dat, aes(x = week_date, y = beta_seas)) + 
     geom_line()
   pl_climate <- pl1 / (pl2 | pl3) / (pl4 | pl5) + plot_annotation(title = loc)
-  ggsave(pl_climate, file = glue("_figures/Climate_{country}_{loc}.pdf"), height = 5.5)
+  ggsave(pl_climate, file = glue("_figures/_climate/Climate_{country}_{loc}.pdf"), height = 5.5)
   
   return(pl_climate)
 }

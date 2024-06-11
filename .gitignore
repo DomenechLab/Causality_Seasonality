@@ -12,3 +12,6 @@ z-dump.R
 test.R
 _archiv
 _data/archiv
+.DS_Store
+_presentationfigures
+*archiv

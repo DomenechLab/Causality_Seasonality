@@ -23,7 +23,9 @@ if(!file.exists(glue("{dirs$data}/spat_data.rds"))) {
     rename(loc = station_name,
            loc_city_name = station_city,
            lon = station_lon,
-           lat = station_lat)
+           lat = station_lat) %>%
+    mutate(lat_km = (dsm::latlong2km(lat = lat, lon = lon, lon0 = 0, lat0 = 0))$km.n,
+           lon_km = (dsm::latlong2km(lat = lat, lon = lon, lon0 = 0, lat0 = 0))$km.e)
   saveRDS(spat_dat, glue("{dirs$data}/spat_data.rds"))
 } else {
   spat_dat <- readRDS("_data/spat_data.rds")
