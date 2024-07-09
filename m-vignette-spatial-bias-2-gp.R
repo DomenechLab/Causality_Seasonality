@@ -1,8 +1,16 @@
 ####################################################################################################
-# Run simulations for vignette on confounding gaussian process models 
-# Key point: Climate can confound the estimation of spatial diffusion. 
-# We have simulations of populations without spatial diffusion. 
-# We want to estimate spatial diffusion using a gaussian process model.
+# Run simulations for vignette on confounding
+# Key point: Spatial variability in climate can be a confounder of spatial transmission effects 
+# Illustrate by running SIR models with climatic data in different locations with different 
+# climates, but no spatial diffusion in transmission. Show that if the variability in climates is 
+# not accounted for, it could be wrongly concluded that spatial difussion exists.
+# Part 2: Control for confounding - using GP
+
+# Out:
+# _saved/_vignette_spatial_bias/02_brmgp_{coun_name}_true.rds
+# _saved/_vignette_spatial_bias/02_brmgp_{coun_name}_sconf.rds
+# _saved/_vignette_spatial_bias/02_brmgp_{coun_name}_sclim.rds
+# _saved/_vignette_spatial_bias/vfigE_{coun_name}_gpcovariance.rds
 ####################################################################################################
 
 # Load packages ------------------------------------------------------------------------------------
@@ -13,14 +21,12 @@ library(glue)
 library(brms)
 library(tidybayes)
 
+# Set plot theme
 theme_set(theme_classic() + theme(strip.background = element_blank()))
-
-set.seed(1854)
 
 # Set directories 
 dirs <- list()
 dirs$data <- "_data"
-dirs$outputs <- "_outputs"
 dirs$figures <- "_figures"
 
 # Load data ----------------------------------------------------------------------------------------
@@ -56,21 +62,21 @@ df_gp <- lapply(simulations_l, function(x) {
 # Run models ---------------------------------------------------------------------------------------
 
 # True model
-brmgp_true <- pomp::bake(file = glue("_saved/_vignette_spatial_bias/brmgp_{coun_name}_true.rds"), {
+brmgp_true <- pomp::bake(file = glue("_saved/_vignette_spatial_bias/02_brmgp_{coun_name}_true.rds"), {
   brm(CC_obs ~ log(S_lag) + log(I_lag) + Te_norm_lag + RH_pred_norm_lag +
         gp(lat_km, lon_km, scale = FALSE),
       data = df_gp, chains = 4, cores = 4, family = negbinomial(link = "log"),
       iter = 10000, control = list(adapt_delta = 0.9))
 })
 # Smooth model without climate
-brmgp_sconf <- pomp::bake(file = glue("_saved/_vignette_spatial_bias/brmgp_{coun_name}_sconf.rds"), {
+brmgp_sconf <- pomp::bake(file = glue("_saved/_vignette_spatial_bias/02_brmgp_{coun_name}_sconf.rds"), {
   brm(CC_obs ~ s(week_no, k = 50) +
         gp(lat_km, lon_km, scale = FALSE),
       data = df_gp, chains = 4, cores = 4, family = negbinomial(link = "log"),
       iter = 10000, control = list(adapt_delta = 0.9))
 })
 # Smooth model with climate
-brmgp_sclim <- pomp::bake(file = glue("_saved/_vignette_spatial_bias/brmgp_{coun_name}_sclim.rds"), {
+brmgp_sclim <- pomp::bake(file = glue("_saved/_vignette_spatial_bias/02_brmgp_{coun_name}_sclim.rds"), {
   brm(CC_obs ~ s(week_no, k = 50) + Te_norm_lag + RH_pred_norm_lag +
         gp(lat_km, lon_km, scale = FALSE),
       data = df_gp, chains = 4, cores = 4, family = negbinomial(link = "log"),
@@ -122,14 +128,22 @@ post_dfpl <- lapply(post_l, function(x) {
   mutate(mod_lab = factor(mod, levels = names(mod_labs), labels = mod_labs))
 
 # Plot it 
-pl <- post_dfpl %>%
+if(coun_name == "Colombia") {
+  uppery <- 0.04
+  expany <- 0.0005
+} else if(coun_name == "Spain") { 
+  uppery <- 0.6
+  expany <- 0.005}
+
+# Main figure 
+pl_main5_gp <- post_dfpl %>%
   ggplot(aes(x = x*1000, y = covariance, color = mod_lab)) +
   geom_ribbon(aes(ymin = ci_025_covariance, ymax = ci_975_covariance, fill = mod_lab),
               alpha = 0.1, color = "transparent") + 
   geom_line(aes(group = .draw), linewidth = 1/4, alpha = 0.1) +
   geom_line(aes(y = median_covariance), linewidth = 1/2) +
   scale_x_continuous("Distance (km)", expand = c(0, 0)) +
-  scale_y_continuous("Covariance", expand = c(0.0005, 0.0005), limits = c(0,0.04)) +
+  scale_y_continuous("Covariance", expand = c(expany, expany), limits = c(0, uppery)) +
   scale_color_manual(values = c("darkorange", "grey20", "grey20")) + 
   scale_fill_manual(values = c("darkorange", "grey20", "grey20")) + 
   facet_wrap(.~mod_lab, ncol = 3, strip.position = "top") + 
@@ -137,204 +151,21 @@ pl <- post_dfpl %>%
   theme(legend.position = "none",
         plot.title = element_text(hjust = 0.5, size = unit(11, "lines")))
 
-saveRDS(pl, "_saved/_vignette_spatial_bias/fig_gph_covariance.rds")
-
-# Transform into correlation matrix ----------------------------------------------------------------
-
-# Function to extract correlation matrixes 
-fun_gp_cov2cor <- function(etasq = NULL, rhosq = NULL) {
-  
-  # Number of locations 
-  nloc <- length(spat_dist[,1])
-  # Compute posterior median covariance among locations
-  k <- matrix(0, nrow = nloc, ncol = nloc)
-  for (i in 1:nloc) {
-    for (j in 1:nloc) {
-      k[i, j] <- etasq * exp(-1 * rhosq * spat_dist[i, j]^2)
-    }}
-  #k <- round(k, 4)
-  diag(k) <- etasq + 0.0005
-  
-  # Convert to correlation matrix
-  rho <- round(cov2cor(k), 2)
-  colnames(rho) <- rownames(rho) <- colnames(spat_dist)
-  
-  # Create df with correlations and distances 
-  spat_cor <- as.data.frame(rho) %>%
-    rownames_to_column("loc") %>%
-    pivot_longer(-loc, names_to = "loc2", values_to = "correlation") %>%
-    mutate(correlation = replace_na(correlation, 0)) %>%
-    left_join(spat_dist %>%
-                as.data.frame() %>%
-                rownames_to_column("loc") %>%
-                pivot_longer(-loc, names_to = "loc2", values_to = "distance"))
-  
-  return(spat_cor)
-}
-
-# Convert to correlations for median and sample of draws -------------------------------------------
-
-# Obtain distance matrix 
-spat_dist <- as.matrix(dist(spat_dat[c("lat_km","lon_km")]))/1000
-colnames(spat_dist) <- unique(spat_dat$loc)
-rownames(spat_dist) <- colnames(spat_dist)
-
-# Correlations for median
-med_est <- post_dfpl %>% 
-  distinct(mod, median_etasq, median_rhosq, 
-           ci_025_etasq, ci_975_etasq, ci_025_rhosq, ci_975_rhosq)
-
-cor_med_l <- list()
-cor_med_l <- sapply(c("true", "sconf", "sclim"), function(m_name) {
-  fun_gp_cov2cor(etasq = filter(med_est, mod == m_name)[["median_etasq"]],
-                 rhosq = filter(med_est, mod == m_name)[["median_rhosq"]])
-}, simplify = FALSE) %>%
-  bind_rows(.id = "mod") %>%
-  mutate(mod_lab = factor(mod, levels = names(mod_labs), labels = mod_labs))
-
-cor_ci_025_l <- list()
-cor_ci_025_l <- sapply(c("true", "sconf", "sclim"), function(m_name) {
-  fun_gp_cov2cor(etasq = filter(med_est, mod == m_name)[["ci_025_etasq"]],
-                 rhosq = filter(med_est, mod == m_name)[["ci_025_rhosq"]])
-}, simplify = FALSE) %>%
-  bind_rows(.id = "mod") %>%
-  mutate(mod_lab = factor(mod, levels = names(mod_labs), labels = mod_labs)) %>%
-  rename(correlation_ci_025 = correlation)
-
-cor_ci_975_l <- list()
-cor_ci_975_l <- sapply(c("true", "sconf", "sclim"), function(m_name) {
-  fun_gp_cov2cor(etasq = filter(med_est, mod == m_name)[["ci_975_etasq"]],
-                 rhosq = filter(med_est, mod == m_name)[["ci_975_rhosq"]])
-}, simplify = FALSE) %>%
-  bind_rows(.id = "mod") %>%
-  mutate(mod_lab = factor(mod, levels = names(mod_labs), labels = mod_labs)) %>%
-  rename(correlation_ci_975 = correlation)
-
-cor_medci_l <- left_join(cor_med_l, cor_ci_025_l) %>%
-  left_join(cor_ci_975_l) %>%
-  mutate(mod_lab = factor(mod, levels = names(mod_labs), labels = mod_labs))
-
-# Correlation for a sample of draws 
-cor_draws_l <- sapply(c("true", "sconf", "sclim"), function(m_name) {
-  lapply(sample(1:length(post_l[[m_name]]$etasq), 100), function(i) {
-    fun_gp_cov2cor(etasq = post_l[[m_name]][[i, "etasq"]],
-                   rhosq = post_l[[m_name]][[i, "rhosq"]])
-  }) %>%
-    bind_rows(.id = "draw")
-}, simplify = FALSE) %>%
-  bind_rows(.id = "mod") %>%
-  mutate(mod_lab = factor(mod, levels = names(mod_labs), labels = mod_labs))
-
-# Plot it 
-pl_main5_gpcor <- cor_draws_l %>%
-  mutate(draw_mod = paste0(mod, draw)) %>%
-  ggplot(aes(x = distance * 1000, y = correlation, color = mod_lab, group = draw_mod)) + 
-  geom_line(linewidth = 1/4, alpha = 0.1) +
-  # geom_ribbon(data = cor_medci_l, 
-  #             aes(ymin = correlation_ci_025, ymax = correlation_ci_975,
-  #                 fill = mod_lab, group = mod_lab, x = distance * 1000),
-  #             alpha = 0.2, color = "transparent") +
-  geom_line(data = cor_medci_l, 
-            aes(group = mod_lab), linewidth = 1/2) +
-  scale_x_continuous("Distance (km)", expand = c(0, 0), limits = c(0, 1000)) +
-  scale_y_continuous("Correlation", expand = c(0, 0)) +
-  scale_color_brewer(palette = "Set2") + 
-  scale_fill_brewer(palette = "Set2") + 
-  facet_wrap(.~mod_lab, ncol = 3, strip.position = "top") + 
-  theme(legend.position = "none")
+# Save figure
+saveRDS(pl_main5_gp, glue("_saved/_vignette_spatial_bias/vfigE_{coun_name}_gpcovariance.rds"))
 
 # Estimates ----------------------------------------------------------------------------------------
 est_l <- lapply(list(brmgp_true, brmgp_sconf, brmgp_sclim), function(x) {
   summary(x)$gp %>%
     rownames_to_column("Paramater")
-}) 
+  }) 
 names(est_l) <- c("true", "sconf", "sclim")
+
 est_l %>%
   bind_rows(.id = "mod") %>%
   mutate(`l-95% CI` = round(`l-95% CI`, digits = 4),
          `u-95% CI` = round(`u-95% CI`, digits = 4),
-         `Est.Error` = round(`Est.Error`, digits = 4),
-         )
-
-#saveRDS(pl_main5_gpcor, "_saved/_vignette_spatial_bias/fig_gp.rds")
-saveRDS(pl_main5_gpcor, "_saved/_vignette_spatial_bias/fig_gph.rds")
+         `Est.Error` = round(`Est.Error`, digits = 4))
 ####################################################################################################
 # END
 ####################################################################################################
-
-# Correlation matrix
-# Number of locations 
-etasq <- med_est$median_etasq[2]
-rhosq <- med_est$median_rhosq[2]
-
-nloc <- length(spat_dist[,1])
-# Compute posterior median covariance among locations
-k <- matrix(0, nrow = nloc, ncol = nloc)
-for (i in 1:nloc) {
-  for (j in 1:nloc) {
-    k[i, j] <- etasq * exp(-1 * rhosq * spat_dist[i, j]^2)
-  }}
-#k <- round(k, 4)
-diag(k) <- etasq + 0.0005
-
-# Convert to correlation matrix
-rho <- round(cov2cor(k), 2)
-colnames(rho) <- rownames(rho) <- colnames(spat_dist)
-
-corrplot::corrplot(rho)
-
-rho["SKBO",]
-
-as.data.frame(spat_dist) %>%
-  pivot_longer(everything()) %>%
-  filter(value != 0) %>%
-  arrange(value)
-
-
-# Tests 
-
-# Smooth model without climate (DO NOT WORK)
-# brmsre_sconf <- pomp::bake(file = glue("_saved/_vignette_spatial_bias/brmsre_{coun_name}_sconf.rds"), {
-#   brm(CC_obs ~ s(week_no, k = 50) +
-#         s(lat_km, lon_km, bs = "re"),
-#       data = df_gp, chains = 4, cores = 4, family = negbinomial(link = "log"),
-#       iter = 10000, control = list(adapt_delta = 0.9))
-# })
-# # Smooth model with climate (DO NOT WORK)
-# brmsre_sclim <- pomp::bake(file = glue("_saved/_vignette_spatial_bias/brmsre_{coun_name}_sclim.rds"), {
-#   brm(CC_obs ~ s(week_no, k = 50) + Te_norm_lag + RH_pred_norm_lag +
-#         s(lat_km, lon_km, bs = "re"),
-#       data = df_gp, chains = 4, cores = 4, family = negbinomial(link = "log"),
-#       iter = 10000, control = list(adapt_delta = 0.9))
-# })
-
-# # Smooth model without climate
-# brmre_sconf <- pomp::bake(file = glue("_saved/_vignette_spatial_bias/brmre_{coun_name}_sconf.rds"), {
-#   brm(CC_obs ~ s(week_no, k = 50) +
-#         (1 + week_no|loc),
-#       data = df_gp, chains = 4, cores = 4, family = negbinomial(link = "log"),
-#       iter = 10000, control = list(adapt_delta = 0.9))
-# })
-# 
-# # Smooth model with climate
-# brmre_sclim <- pomp::bake(file = glue("_saved/_vignette_spatial_bias/brmre_{coun_name}_sclim.rds"), {
-#   brm(CC_obs ~ s(week_no, k = 50) + Te_norm_lag + RH_pred_norm_lag +
-#         (1 + week_no|loc),
-#       data = df_gp, chains = 4, cores = 4, family = negbinomial(link = "log"),
-#       iter = 10000, control = list(adapt_delta = 0.9))
-# })
-# 
-# # Smooth model without climate
-# brmgpre_sconf <- pomp::bake(file = glue("_saved/_vignette_spatial_bias/brmgpre_{coun_name}_sconf.rds"), {
-#   brm(CC_obs ~ s(week_no, k = 50) +
-#         gp(lat_km, lon_km, scale = FALSE) + (1 + week_no|loc),
-#       data = df_gp, chains = 4, cores = 4, family = negbinomial(link = "log"),
-#       iter = 10000, control = list(adapt_delta = 0.9))
-# })
-# # Smooth model with climate
-# brmgpre_sclim <- pomp::bake(file = glue("_saved/_vignette_spatial_bias/brmgpre_{coun_name}_sclim.rds"), {
-#   brm(CC_obs ~ s(week_no, k = 50) + Te_norm_lag + RH_pred_norm_lag +
-#         gp(lat_km, lon_km, scale = FALSE) + (1 + week_no|loc),
-#       data = df_gp, chains = 4, cores = 4, family = negbinomial(link = "log"),
-#       iter = 10000, control = list(adapt_delta = 0.9))
-# })
