@@ -1,15 +1,14 @@
-#######################################################################################################
+####################################################################################################
 # Generate stochastic simulation for pomp model
 # Stochasticity is introduced via environmental noise in the transmission rate
 # Everything else is assumed deterministic
-#######################################################################################################
+####################################################################################################
 
 GenStochsim <- function(pomp_mod, beta_sigma = 0.05) {
-  
   # Args: 
   # pomp_mod: POMP model object
-  # beta_sigma: SD of environmental Gamma white noise in transmission
-  # Returns: data frame with state variables
+  # beta_sigma: SD of environmental Gamma white noise in transmission (numeric)
+  # Returns: Table with state variables (data frame)
   
   # Extract pomp components
   pars <- coef(pomp_mod) # Model parameters
@@ -45,12 +44,12 @@ GenStochsim <- function(pomp_mod, beta_sigma = 0.05) {
     Te_cur <- covars_df$Te[covars_df$week == (tt - 1)]
     Td_cur <- covars_df$Td[covars_df$week == (tt - 1)]
     
-    #Calculate transmission rate
+    # Calculate transmission rate
     
     # Climate-induced seasonal forcing
     RH_pred = Pred_RH(temp = Te_cur, dewPoint = Td_cur)
-    beta_seas <-  pars["e_Te"] * (Te_cur / pars["Te_mean"] - 1) + pars["e_RH"] * (RH_pred / pars["RH_mean"] - 1)
-    beta_seas <-  exp(beta_seas) # Seasonal forcing
+    beta_seas <- pars["e_Te"] * (Te_cur / pars["Te_mean"] - 1) + pars["e_RH"] * (RH_pred / pars["RH_mean"] - 1)
+    beta_seas <- exp(beta_seas) # Seasonal forcing
     b <-  pars["R0"] * (pars["mu"] + 1.0) * beta_seas # Transmission rate
     
     # Environmental stochasticity
@@ -79,3 +78,7 @@ GenStochsim <- function(pomp_mod, beta_sigma = 0.05) {
   
   return(out)
 }
+
+####################################################################################################
+# End
+####################################################################################################

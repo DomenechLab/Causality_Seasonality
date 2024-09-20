@@ -1,5 +1,5 @@
 #######################################################################################################
-# Make figures for all vignettes
+# Make figures for vignette spatial bias
 #######################################################################################################
 
 # Load packages -----------------------------------------------------------
@@ -8,13 +8,9 @@ source("s-base_packages.R")
 theme_set(theme_classic() + theme(panel.grid.minor = element_blank()))
 save_plot <- T # Should all the plots be saved as a pdf? 
 
-####################################################################################################
-# VIGNETTE ON SPATIAL BIAS 
-####################################################################################################
-
 # Load plots ---------------------------------------------------------------------------------------
 # Choose between Spain and Colombia
-coun_name <- "Spain"
+coun_name <- "Colombia"
 if(coun_name == "Spain") locref <- "LEAS" # Select reference Madrid or Gijon
 if(coun_name == "Colombia") locref <- "SKRH" # Select reference Bogota or SKRH
 
@@ -42,14 +38,14 @@ print(pl_vig)
 if(save_plot) {
   if(coun_name == "Colombia") { 
     ggsave(pl_vig, height = 8, width = 10, 
-           file = glue("_figures/00_Fig_vignette_spatial_bias_{coun_name}.pdf")) 
+           file = glue("_figures/Fig_04_vignette_spatial_bias_{coun_name}.pdf")) 
   }
   if(coun_name == "Spain") { 
     ggsave(pl_vig, height = 8, width = 10, 
-           file = glue("_figures/00_Suppfig_vignette_spatial_bias_{coun_name}.pdf")) 
+           file = glue("_figures/Suppfig_04_vignette_spatial_bias_{coun_name}.pdf")) 
   }
 }
 
 #######################################################################################################
-# END
+# End
 #######################################################################################################

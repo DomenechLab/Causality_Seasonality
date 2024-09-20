@@ -2,17 +2,13 @@
 # Obtain simulations from the models in different locations 
 ####################################################################################################
 
-fun_SimulateMod <- function(loc = "Cartagena",
-                            parms = parms,
-                            chg_parms = chg_parms,
-                            nsim = 1) {
+fun_SimulateMod <- function(loc = "Cartagena", parms = parms, chg_parms = chg_parms, nsim = 1) {
   # Args: 
   # loc: name of weather station for the target location (string)
   # pars: base parameters in the model (named vector)
   # chg_parms: parameters to change in the simulations (eps, R0, alpha with index) (data frame)
   # nsim: number of simulations (numeric)
-  # Return: 
-  # Table of simulated data
+  # Returns: Table of simulated data (data frame)
   
   # Create pomp model for a given location 
   PompMod <- CreateMod(covars = covars_l[[loc]], lin_bool_val = T)

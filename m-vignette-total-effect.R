@@ -156,62 +156,7 @@ sim_long <- readRDS(glue("_saved/_vignette_total_effect/sim_te_effect_Pasto.rds"
   mutate(loc_tidy_nm = case_when(loc_tidy_nm == 1 ~ "Pasto",
                                  loc_tidy_nm == 2 ~ "Lübeck"))
 
-# # Main figure
-# pl1a <- sim_long %>%
-#   filter(R0 == 1.25) %>% 
-#   ggplot(aes(x = week_no, y = beta_seas, color = Te_effect, group = Te_effect)) + 
-#   geom_line() + 
-#   scale_x_continuous("Time (weeks)") + 
-#   scale_y_continuous("Transmission rate") + 
-#   scale_color_manual("Effect of temperature", values = col,
-#                      labels = c(expression(paste("Indirect effect (", delta[Te], " = 0, ", delta[RH], " = -0.2)")),
-#                                 expression(paste("Total effect (", delta[Te], " = -0.2, ", delta[RH], " = -0.2)")))) +
-#   facet_wrap(loc_tidy_nm~., scales = "free", ncol = 1) + 
-#   theme(legend.position = "top",
-#         legend.direction = "vertical",
-#         legend.justification = "left",
-#         strip.background = element_blank())
-# 
-# # pl1b_labs <- c(
-# #   expression(paste("Lübeck: Indirect effect (", delta[Te], " = 0, ", delta[RH], " = -0.2)")),
-# #   expression(paste("Lübeck: Total effect (", delta[Te], " = -0.2, ", delta[RH], " = -0.2)")),
-# #   expression(paste("Pasto: Indirect effect (", delta[Te], " = 0, ", delta[RH], " = -0.2)")),
-# #   expression(paste("Pasto: Total effect (", delta[Te], " = -0.2, ", delta[RH], " = -0.2)")))
-# 
-# pl1b_labs <- c(
-#   expression(paste("Lübeck: Indirect effect")),
-#   expression(paste("Lübeck: Total effect")),
-#   expression(paste("Pasto: Indirect effect")),
-#   expression(paste("Pasto: Total effect")))
-# 
-# pl1b <- sim_long %>%
-#   filter(R0 == 1.25) %>% 
-#   mutate(loc_te = glue("{loc_tidy_nm}: {Te_effect}")) %>%
-#   mutate(loc_te = factor(loc_te, labels = pl1b_labs)) %>%
-#   ggplot(aes(x = Te, y = beta_seas, color = Te_effect, group = Te_effect)) + 
-#   geom_point() + 
-#   scale_x_continuous("Temperature (°C)") + 
-#   scale_y_continuous("Transmission rate") + 
-#   facet_wrap(loc_te~., scales = "free", labeller = label_parsed) + 
-#   scale_color_manual("Effect of temperature", values = col) + 
-#   #geom_smooth(color = "grey") + 
-#   theme(legend.position = "none",
-#         strip.background = element_blank())
-# 
-# pl1 <- pl1a + pl1b + plot_annotation(tag_levels = "A")
-# 
-# ggsave(pl1, file = glue("_figures/00_Fig_total-effect.pdf"), 
-#        height = 6.5, width = 12.5)
-
-# ======================================================================================================
-# pl1b_labs <- c(
-#   expression(paste("Lübeck: Indirect effect (", delta[Te], " = 0, ", delta[RH], " = -0.2)")),
-#   expression(paste("Lübeck: Total effect (", delta[Te], " = -0.2, ", delta[RH], " = -0.2)")),
-#   expression(paste("Pasto: Indirect effect (", delta[Te], " = 0, ", delta[RH], " = -0.2)")),
-#   expression(paste("Pasto: Total effect (", delta[Te], " = -0.2, ", delta[RH], " = -0.2)")))
-
-
-# Main figure
+# Main figure --------------------------------------------------------------------------------------
 fun_main_pl <- function(loc = "Pasto", legend = T) {
   pl1a <- sim_long %>%
     filter(state_var == "CC") %>%
@@ -253,12 +198,10 @@ fun_main_pl <- function(loc = "Pasto", legend = T) {
 
 pl1 <- fun_main_pl(loc = "Lübeck") | fun_main_pl(loc = "Pasto", legend = F)
 
-ggsave(pl1, file = glue("_figures/00_Fig_total-effect.pdf"),
+ggsave(pl1, file = glue("_figures/Fig_05_total-effect.pdf"),
        height = 7, width = 9)
 
-# ==================================================================================================
-
-# Supp figure
+# Supp figure --------------------------------------------------------------------------------------
 fun_supp_pl <- function(loc = "Pasto", legend = T) {
   pls1a <- sim_long %>%
     filter(state_var == "CC_obs") %>%
@@ -300,49 +243,10 @@ fun_supp_pl <- function(loc = "Pasto", legend = T) {
 
 pls1 <- fun_supp_pl(loc = "Lübeck") | fun_supp_pl(loc = "Pasto", legend = F)
 
-ggsave(pls1, file = glue("_figures/00_Suppfig_total-effect.pdf"), 
+ggsave(pls1, file = glue("_figures/Suppfig_05_total-effect.pdf"), 
        height = 7, width = 9)
 
-# pls1a <- sim_long %>%
-#   filter(state_var == "CC") %>%
-#   filter(R0 == 1.25) %>%
-#   ggplot(aes(x = week_no, y = value / N * 100, color = Te_effect, group = Te_effect)) + 
-#   geom_line() + 
-#   scale_x_continuous("Time (weeks)") + 
-#   scale_y_continuous("Total cases (per week per 100)") + 
-#   scale_color_manual("Effect of temperature", values = col,
-#                      labels = c(expression(paste("Indirect effect (", delta[Te], " = 0, ", delta[RH], " = -0.2)")),
-#                                 expression(paste("Total effect (", delta[Te], " = -0.2, ", delta[RH], " = -0.2)")))) +
-#   facet_wrap(.~loc_tidy_nm, scales = "free", ncol = 2) + 
-#   theme(strip.background = element_blank(),
-#         legend.position = "top",
-#         legend.direction = "vertical",
-#         legend.justification = "left")
-# 
-# 
-# pls2a <- sim_long %>%
-#   filter(state_var == "CC") %>%
-#   filter(R0 == 1.25) %>% 
-#   mutate(loc_te = glue("{loc_tidy_nm}: {Te_effect}")) %>%
-#   mutate(loc_te = factor(loc_te, labels = pl1b_labs)) %>%
-#   ggplot(aes(x = Te, y = value/N*100, color = Te_effect, group = Te_effect)) + 
-#   geom_point() + 
-#   scale_x_continuous("Temperature (°C)") + 
-#   scale_y_continuous("Total cases (per week per 100)") + 
-#   facet_wrap(loc_te~., scales = "free", labeller = label_parsed, ncol = 4) + 
-#   scale_color_manual("Effect of temperature", values = col) + 
-#   #geom_smooth(color = "grey") + 
-#   theme(legend.position = "none",
-#         strip.background = element_blank())
-# 
-# #pls1 <- pls1a + pls2a + plot_annotation(tag_levels = "A")
-# pls1 <- pls1a / pls2a + plot_annotation(tag_levels = "A")
-# 
-# ggsave(pls1, file = glue("_figures/00_Suppfig_total-effect.pdf"), 
-#        height = 6, width = 10)
-
-
-# Calculate spearman correlations ==================================================================
+# Calculate spearman correlations ------------------------------------------------------------------
 
 sim_long_cor <- sim_long %>%
   filter(R0 == 1.25) %>% 
@@ -369,7 +273,7 @@ sim_long_cor %>%  filter(loc_tidy_nm == "Pasto" & Te_effect == "Total effect") %
   summarise(ppcor::pcor.test(Te, beta_seas, RH, method = "spearman"))
 
 ####################################################################################################
-# END
+# End
 ####################################################################################################
 
 

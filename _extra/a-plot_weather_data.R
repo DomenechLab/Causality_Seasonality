@@ -1,9 +1,9 @@
-#######################################################################################################
+####################################################################################################
 # Plot weather data in Colombia and Germany
 # Check the mathematical relationship between T, Td, and RH 
-#######################################################################################################
+####################################################################################################
 
-# Load packages -----------------------------------------------------------
+# Load packages ------------------------------------------------------------------------------------
 rm(list = ls())
 source("s-base_packages.R")
 source("f-Pred_RH.R")
@@ -14,13 +14,13 @@ library(readxl)
 theme_set(theme_bw())
 par(bty = "l", las = 2)
 
-# Path to raw data --------------------------------------------------------
-path_clim_dat <- "/Users/u_domenech/My Drive/Domenech_lab/_Laura/_aproj1_causal_seasonality/_codes/_data"
+# Path to raw data ---------------------------------------------------------------------------------
+path_clim_dat <- "_data"
 countries_nm <- path_clim_dat %>% 
   list.dirs(full.names = F, recursive = F) %>% 
   str_remove(pattern = "_")
 
-# Load data ---------------------------------------------------------------
+# Load data ----------------------------------------------------------------------------------------
 
 if(!file.exists("_data/clim_data.rds")) {
   #countries_nm <- c("Colombia", "Germany", "Spain")
@@ -88,7 +88,7 @@ if(!file.exists("_data/clim_data.rds")) {
   dat_wide <- readRDS("_data/clim_data.rds")
 }
 
-# Plot --------------------------------------------------------------------
+# Plot ---------------------------------------------------------------------------------------------
 pl <- ggplot(data = dat_wide %>% filter(year_no == max(year_no), Te < Inf), 
              mapping = aes(x = RH, y = RH_pred, color = Te)) + 
   geom_point() + 
@@ -98,7 +98,7 @@ pl <- ggplot(data = dat_wide %>% filter(year_no == max(year_no), Te < Inf),
   labs(color = "Te")
 print(pl)
 
-ggsave(filename = "_figures/_other/RH.pdf", width = 8, height = 8)
+ggsave(filename = "_figures/_climate/RH.pdf", width = 8, height = 8)
 
 vars_nm <- c("Te", "Td", "RH")
 
@@ -117,11 +117,11 @@ for(var_nm in vars_nm) {
       labs(x = "Day", y = "Value", title = sprintf("Country: %s, climatic variable: %s", ct_nm, var_nm))
     print(pl)
     
-    ggsave(filename = sprintf("_figures/_other/%s-%s.pdf", ct_nm, var_nm), plot = pl, width = 12, height = 8)
+    ggsave(filename = sprintf("_figures/_climate/%s-%s.pdf", ct_nm, var_nm), plot = pl, width = 12, height = 8)
   }
 }
 
-# Identify locations with similar variability in RH ---------------------------------------
+# Identify locations with similar variability in RH ------------------------------------------------
 
 # Calculate weekly averages
 dat_week <- dat_wide %>% 
@@ -150,7 +150,7 @@ pl <- ggplot(data = dat_week_CV %>% filter(country %in% countries_nm, clim_var %
   labs(x = "Country", y = "Coefficient of variation")
 print(pl)
 
-ggsave(filename = "_figures/_other/CV_RH_Te.pdf", width = 10, height = 10)
+ggsave(filename = "_figures/_climate/CV_RH_Te.pdf", width = 10, height = 10)
 
 # Plot
 dat_week_rho <- dat_week %>% 
@@ -166,7 +166,7 @@ pl <- ggplot(data = dat_week_rho %>% filter(country %in% countries_nm),
   geom_text_repel(max.overlaps = Inf) + 
   labs(x = "Country", y = "rho(Te, RH)")
 print(pl)
-ggsave(filename = "_figures/_other/rho_RH_Te.pdf", width = 8, height = 8)
+ggsave(filename = "_figures/_climate/rho_RH_Te.pdf", width = 8, height = 8)
 
 tmp <- dat_week_CV %>% 
   filter(clim_var %in% c("Te", "RH_pred")) %>% 
@@ -184,8 +184,7 @@ pl <- ggplot(data = tmp, mapping = aes(x = Te, y = RH_pred, color = rho, label =
         panel.grid.minor = element_blank()) + 
   labs(x = "CV(Te)", y = "CV(RH)", color = "cor(Te, RH)")
 print(pl)
-ggsave(filename = "_figures/_other/CV_rho_RH_Te.pdf", plot = pl, width = 12, height = 10)
-
+ggsave(filename = "_figures/_climate/CV_rho_RH_Te.pdf", plot = pl, width = 12, height = 10)
 
 #######################################################################################################
 # END

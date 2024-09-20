@@ -2,8 +2,8 @@
 # Calculate relative humidity (RH) from temperature and dew point temperature
 # See https://www.omnicalculator.com/physics/relative-humidity for details 
 #######################################################################################################
+
 CreateMod <- function(covars, lin_bool_val = T) {
-  
   # Args: 
   # covars: table of covariates: week_no (starting at 0), Te and Td (in degrees celsius) (data frame)
   # lin_bool_val: should the transmission term be linearized? (boolean)
@@ -29,7 +29,6 @@ static double pred_RH(double Te, double Td) {
   return out; 
 }
 "
-  
   # Csnippet for deterministic skeleton
   det_process_model <- Csnippet("
 
@@ -144,3 +143,7 @@ static double pred_RH(double Te, double Td) {
   
   return(mod)
 }
+
+####################################################################################################
+# End
+####################################################################################################

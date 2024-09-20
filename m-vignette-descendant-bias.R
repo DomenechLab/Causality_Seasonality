@@ -2,7 +2,7 @@
 # Run simulations for vignette on descendant bias
 # Key point: many studies regress incidence on climatic variables, 
 # But in fact climatic variables affect transmission, and the association between transmission and incidence can be complex
-# Illustrate by running SIS and SIR models with climatic data in Madrid (weather station "LEVS") 
+# Illustrate by running SIS and SIR models with climatic data in Lubeck (weather station "Rostock") 
 #######################################################################################################
 
 # Load packages -----------------------------------------------------------
@@ -15,7 +15,7 @@ source("s-base_packages.R")
 library("mgcv")
 library("pomp")
 theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
-save_plot <- F # Should all the plots be saved as a pdf? 
+save_plot <- T # Should all the plots be saved as a pdf? 
 
 # Set model parameters ----------------------------------------------------
 parms <- c("mu" = 1 / 80 / 52, # Birth rate 
@@ -531,7 +531,7 @@ print(pl_all)
 
 if(save_plot) {
   ggsave(plot = pl_all, 
-         filename = sprintf("_figures/_main/vignette-descendant-bias-main-%s.pdf", loc_nm), 
+         filename = sprintf("_figures/Fig_02_descendant-bias-%s.pdf", loc_nm), 
          width = 12, 
          height = 8)
 }
@@ -561,7 +561,7 @@ print(pl)
 
 if(save_plot) {
   ggsave(plot = pl, 
-         filename = sprintf("_figures/_main/vignette-descendant-bias-sup-%s.pdf", loc_nm), 
+         filename = sprintf("_figures/Suppfig_01_descendant-bias-%s.pdf", loc_nm), 
          width = 9, 
          height = 9)
 }

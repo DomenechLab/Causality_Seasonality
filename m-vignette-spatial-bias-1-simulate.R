@@ -55,7 +55,7 @@ parms <- c("mu" = 1 / 80 / 52, # Birth rate
 
 # Load data ----------------------------------------------------------------------------------------
 # Choose between Spain and Colombia
-coun_name <- "Spain"
+coun_name <- "Colombia"
 
 # Load names of the locations
 names_l <- unique(filter(readRDS("_data/spat_data.rds"), country == coun_name)$loc)
@@ -86,6 +86,12 @@ unlist(lapply(clim_dat_l, function(x) cor(x$RH_pred_norm, x$RH_norm, method = "s
 pl_climate_l <- sapply(names_l, fun_PlotClimData, simplify = F)
 if(coun_name == "Colombia") pl_climate_l$SKBO else if(coun_name == "Spain") pl_climate_l$LEVS
   
+# Plot transmission rate in all the locations 
+bind_rows(clim_dat_l, .id = "loc") %>%
+  ggplot(aes(x = week_no, y = beta_seas, color = loc)) + 
+  geom_line() + 
+  scale_color_viridis_d()
+
 # Prepare covariate table 
 covars_l <- lapply(clim_dat_l, function(x) {
     select(x, week_date, week_no, Te, Td, RH_pred) %>% 
@@ -274,5 +280,5 @@ saveRDS(pl_main2_sncf, glue("_saved/_vignette_spatial_bias/vfigB_{coun_name}_snc
 saveRDS(pl_main3_ccf, glue("_saved/_vignette_spatial_bias/vfigC_{coun_name}_ccf.rds"))
 saveRDS(pl_main4_map, glue("_saved/_vignette_spatial_bias/vfigA_{coun_name}_map.rds"))
 ####################################################################################################
-# END
+# End
 ####################################################################################################

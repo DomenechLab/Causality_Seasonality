@@ -24,7 +24,7 @@ library("corrplot")
 
 theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
 par(bty = "l", las = 1, lwd = 2)
-save_plot <- T # Should all the plots be saved as a pdf? 
+save_plot <- F # Should all the plots be saved as a pdf? 
 
 # Set model parameters ----------------------------------------------------
 parms <- c("mu" = 1 / 80 / 52, # Birth rate 
@@ -46,7 +46,7 @@ parms <- c("mu" = 1 / 80 / 52, # Birth rate
 e_Te <- parms["e_Te"]  
 e_RH <- parms["e_RH"]
 loc_nm <- "SKBO"
-if(save_plot) pdf(file = sprintf("_saved/vignette-quasi-experiments-%s.pdf", loc_nm), width = 8, height = 8)
+#if(save_plot) pdf(file = sprintf("_figures/vignette-quasi-experiments-%s.pdf", loc_nm), width = 8, height = 8)
 
 clim_dat <- CreateClimData(loc_nm = loc_nm, n_years = 10)
 
@@ -201,7 +201,7 @@ fits <- vector(mode = "list", length = n_rep)
 # Parameters to estimate
 all_pars_nm <- c("R0", "alpha", "rho_mean", "rho_k", "e_Te", "e_RH")
 
-fits <- bake(file = sprintf("_saved/vignette-quasi-experiments-%s.rds", loc_nm), 
+fits <- bake(file = paste0("_saved/_vignette-quasi-experiments/R0_", parms[["R0"]],"/vignette-quasi-experiments-", loc_nm, ".rds"), 
              expr = {
                for(s in seq_len(n_rep)) {
                  
@@ -313,11 +313,11 @@ to_save <- list(sim_det = sim,
                 pars_est = pars_mle_se)
 
 saveRDS(object = to_save, 
-        file = sprintf("_saved/vignette-quasi-experiments-%s-all.rds", loc_nm))
+        file = paste0("_saved/_vignette-quasi-experiments/R0_", parms[["R0"]],"/vignette-quasi-experiments-", loc_nm, "-all.rds")) 
 
 # End  statements ---------------------------------------------------------------------
 if(save_plot) dev.off()
 
 #######################################################################################################
-# END
+# End
 #######################################################################################################

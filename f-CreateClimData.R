@@ -1,13 +1,13 @@
-#######################################################################################################
+####################################################################################################
 # Prepare climatic data
-#######################################################################################################
+####################################################################################################
 
 CreateClimData <- function(loc_nm, n_years = 10) {
   # Args: 
   # loc_nm: name of weather station for the target location (string)
   # n_years: no of years of climatic data required (numeric)
-  # Return: 
-  # Table of absolute and normalized values for weekly means for Te, Td, RH, and RH_pred (data frame)
+  # Returns: Table of absolute and normalized values for weekly means for Te, Td, RH, and RH_pred 
+  # (data frame)
   
   # Load all climatic data
   clim_dat <- readRDS("_data/clim_data.rds")
@@ -57,3 +57,7 @@ CreateClimData <- function(loc_nm, n_years = 10) {
   
   return(clim_dat)
 }
+
+####################################################################################################
+# End
+####################################################################################################

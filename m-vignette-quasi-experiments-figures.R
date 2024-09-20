@@ -1,8 +1,8 @@
-#######################################################################################################
-# Make figures for all vignettes
-#######################################################################################################
+####################################################################################################
+# Make figures for vignette quasi-experiments
+####################################################################################################
 
-# Load packages -----------------------------------------------------------
+# Load packages ------------------------------------------------------------------------------------
 rm(list = ls())
 source("s-base_packages.R")
 source("f-Pred_RH.R")
@@ -11,11 +11,7 @@ source("f-CreateClimData.R")
 theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
 save_plot <- T # Should all the plots be saved as a pdf? 
 
-#######################################################################################################
-# VIGNETTE ON QUASI-EXPERIMENTS
-#######################################################################################################
-
-# Load climatic data ------------------------------------------------------
+# Load climatic data -------------------------------------------------------------------------------
 loc_df <- data.frame(loc_nm = c("Bogota", "Lübeck"), 
                      airport_code = c("SKBO", "Rostock"))
 
@@ -48,12 +44,12 @@ pl <- ggplot(data = clim_dat %>% filter(clim_var %in% c("Te_norm", "RH_pred_norm
   labs(x = "Week no", y = "Renormalized value", color = "")
 print(pl)
 
-if(save_plot) {
-  ggsave(plot = pl, 
-         filename = "_figures/_supp/vignette-quasi-experiments-supp-1.pdf", 
-         width = 10, 
-         height = 8)
-}
+# if(save_plot) {
+#   ggsave(plot = pl, 
+#          filename = "_figures/Fig_03vignette-quasi-experiments-supp-1.pdf", 
+#          width = 10, 
+#          height = 8)
+# }
 
 # Load simulations and estimations  ---------------------------------------
 path_to_res <- "_saved/_vignette-quasi-experiments/R0_1.25/"
@@ -142,7 +138,7 @@ pl_all <- pl_up / pl_low +
 print(pl_all)
 
 if(save_plot) {
-  ggsave(filename = sprintf("_figures/_main/vignette-quasi-experiments-main-R0-%.2f.pdf", 
+  ggsave(filename = sprintf("_figures/Fig_03_vignette-quasi-experiments-R0-%.2f.pdf", 
                             pars_true$true[pars_true$par == "R0"]), 
          plot = pl_all, 
          width = 10, 
@@ -189,13 +185,13 @@ pl_supp <- ggplot(data = pars_others,
   labs(x = "Parameter estimate", y = "Density", color = "", fill = "")
 print(pl_supp)
 
-if(save_plot) {
-  ggsave(filename = sprintf("_figures/_supp/vignette-quasi-experiments-supp2-R0-%.2f.pdf", pars_true$true[pars_true$par == "R0"]), 
-         plot = pl_supp, 
-         width = 10, 
-         height = 8)
-}
+# if(save_plot) {
+#   ggsave(filename = sprintf("_figures/_supp/vignette-quasi-experiments-supp2-R0-%.2f.pdf", pars_true$true[pars_true$par == "R0"]), 
+#          plot = pl_supp, 
+#          width = 10, 
+#          height = 8)
+# }
 
 #######################################################################################################
-# END
+# End
 #######################################################################################################

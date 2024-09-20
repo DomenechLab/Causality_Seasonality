@@ -1,13 +1,13 @@
-#######################################################################################################
+####################################################################################################
 # Create POMP for SEIR with coupling
 # See https://www.omnicalculator.com/physics/relative-humidity for details 
-#######################################################################################################
+####################################################################################################
+
 CreateMod <- function(covars, lin_bool_val = T) {
-  
   # Args: 
   # covars: table of covariates: week_no (starting at 0), Te and Td (in degrees celsius) (data frame)
   # lin_bool_val: should the transmission term be linearized? (boolean)
-  # Returns: POMP model 
+  # Returns: POMP model with coupling
   
   # Check that covariates are correctly formatted
   # stopifnot(all(c("week_no", "Te", "Td", "RH_pred") %in% colnames(covars)))
@@ -206,6 +206,6 @@ CreateMod <- function(covars, lin_bool_val = T) {
   return(mod)
 }
 
-#######################################################################################################
-# END
-#######################################################################################################
+####################################################################################################
+# End
+####################################################################################################

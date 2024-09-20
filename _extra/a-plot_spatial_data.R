@@ -1,5 +1,5 @@
 ####################################################################################################
-# Plot spatial data in Colombia and Spain
+# Plot spatial data in Germany, Colombia, and Spain
 ####################################################################################################
 
 # Load packages ------------------------------------------------------------------------------------
@@ -28,7 +28,7 @@ if(!file.exists(glue("{dirs$data}/spat_data.rds"))) {
            lon_km = (dsm::latlong2km(lat = lat, lon = lon, lon0 = 0, lat0 = 0))$km.e)
   saveRDS(spat_dat, glue("{dirs$data}/spat_data.rds"))
 } else {
-  spat_dat <- readRDS("_data/spat_data.rds")
+  spat_dat <- readRDS(glue("{dirs$data}/spat_data.rds"))
 }
 
 # Plot spatial data --------------------------------------------------------------------------------
@@ -48,7 +48,7 @@ pl_germany <- ggplot() +
   coord_map() + 
   theme(legend.position = "none",
         panel.grid = element_blank())
-ggsave(pl_germany, file = glue("_figures/Map_Germany.pdf"), width = 5.5)
+ggsave(pl_germany, file = glue("_extra/_extrafigures/_maps/Map_Germany.pdf"), width = 5.5)
 
 pl_spain <- ggplot() +
   geom_polygon(data = filter(map_data("world"), region == "Spain"), 
@@ -64,7 +64,7 @@ pl_spain <- ggplot() +
   coord_map() + 
   theme(legend.position = "none",
         panel.grid = element_blank())
-ggsave(pl_spain, file = glue("_figures/Map_Spain.pdf"), width = 5.5)
+ggsave(pl_spain, file = glue("_extra/_extrafigures/_maps/Map_Spain.pdf"), width = 5.5)
 
 # Map of Colombia 
 pl_colombia <- ggplot() +
@@ -82,7 +82,7 @@ pl_colombia <- ggplot() +
   theme(legend.position = "none",
         panel.grid = element_blank())
 
-ggsave(pl_colombia, file = glue("_figures/Map_Colombia.pdf"), width = 5.5)
+ggsave(pl_colombia, file = glue("_extra/_extrafigures/_maps/Map_Colombia.pdf"), width = 5.5)
 
 ####################################################################################################
 # END

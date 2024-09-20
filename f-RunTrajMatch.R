@@ -1,20 +1,19 @@
-#######################################################################################################
-# Calculate relative humidity (RH) from temperature and dew point temperature
-# See https://www.omnicalculator.com/physics/relative-humidity for details 
-#######################################################################################################
+####################################################################################################
+# Run trajectory matching for the coupling model 
+####################################################################################################
+
 FitOptim <- function(sim = sim_l$clim,
                      all_pars_nm = c("p", "R0", "alpha", "rho_mean", "rho_k", "e_Te", "e_RH"),
-                     asum_e_RH = -0.2,
-                     asum_e_Te = -0.2,
-                     asum_coup = 0.01,
-                     covars = covars) {
+                     asum_e_RH = -0.2, asum_e_Te = -0.2, asum_coup = 0.01, covars = covars) {
   
-  # Argments
-  # sim = list, n simulations with df named CC_obs1 and CC_obs2 with columns per simulation
-  # all_pars_nm = vector, names of the parameters to estimate
-  # asum_clim = numeric, assumption and starting value on the clim effect
-  # asum_coup = numeric (0,1), assumption and starting value on the coupling effect
-  # covars = dataframe, covars for the model 
+  # Args:
+  # sim: n simulations with df named CC_obs1 and CC_obs2 with columns per simulation (list)
+  # all_pars_nm: names of the parameters to estimate (vector)
+  # asum_e_RH: assumption and starting value on the RH effect (numeric)
+  # asum_e_Te: assumption and starting value on the Te effect (numeric)
+  # asum_coup: assumption and starting value on the coupling effect (0,1) (numeric)
+  # covars: covars for the model (data frame)
+  # Returns: Table with mle for the parameters (data frame)
   
   n_rep <- length(sim$CC_obs1)
   
@@ -86,5 +85,5 @@ FitOptim <- function(sim = sim_l$clim,
 }
 
 #######################################################################################################
-# END
+# End
 #######################################################################################################

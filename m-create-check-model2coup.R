@@ -58,8 +58,8 @@ sim <- simulate(object = PompMod, params = p_mat, format = "data.frame") %>%
   relocate(N1, N2) %>%
   pivot_longer(cols = c(S1, I1, R1, N1, CC1, CC_obs1, S2, I2, R2, CC2, N2, CC_obs2))
 
-# Plot trajectories (no extra-demographic stochasticity)
-sim %>%  
+# Plot trajectories (no extra-demographic stochasticity) -------------------------------------------
+pl <- sim %>%  
   filter(sigma_beta == 0, e_Te == 0) %>%
   separate(name, into = c("name", "Patch"), sep = -1) %>%
   filter(name != "CC") %>%
@@ -84,9 +84,10 @@ sim %>%
   facet_grid(name~p, scales = "free") + 
   ggtitle("With climate forcing and no extra-demographic stochasticity") + 
 plot_layout(ncol = 1)
+print(pl)
 
-# Plot simulations (with extra-demographic stochasticity)
-sim %>%  
+# Plot simulations (with extra-demographic stochasticity) ------------------------------------------
+pl <- sim %>%  
   filter(sigma_beta == 0.02, e_Te == 0) %>%
   separate(name, into = c("name", "Patch"), sep = -1) %>%
   filter(name != "CC") %>%
@@ -111,9 +112,10 @@ sim %>%
   facet_grid(name~p, scales = "free") + 
   ggtitle("With climate forcing and no extra-demographic stochasticity") + 
 plot_layout(ncol = 1)
+print(pl)
 
-# Check for sigma beta 
-sim %>%  
+# Check without coupling but with forcing and different values for sigma_beta
+pl <- sim %>%  
   filter(p == 0) %>%
   separate(name, into = c("name", "Patch"), sep = -1) %>%
   filter(name == "CC_obs") %>%
@@ -126,9 +128,10 @@ sim %>%
   facet_wrap(sigma_beta~e_Te, scales = "free", ncol = 2) + 
   ggtitle("With and without climate forcing, no coupling, different values for sigma_beta") + 
   plot_layout(ncol = 1)
+print(pl)
 
-# Check 
-sim %>%  
+# Check without climate forcing but different values for p and sigma_beta
+pl <- sim %>%  
   filter(e_Te == 0) %>%
   separate(name, into = c("name", "Patch"), sep = -1) %>%
   filter(name == "CC_obs") %>%
@@ -141,7 +144,8 @@ sim %>%
   facet_wrap(p~sigma_beta, scales = "free", ncol = 7) + 
   ggtitle("Without climate forcing, different values for p and sigma_beta") + 
   plot_layout(ncol = 1)
+print(pl)
 
-#######################################################################################################
+####################################################################################################
 # END
-#######################################################################################################
+####################################################################################################
