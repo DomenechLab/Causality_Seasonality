@@ -98,7 +98,7 @@ pl <- ggplot(data = dat_wide %>% filter(year_no == max(year_no), Te < Inf),
   labs(color = "Te")
 print(pl)
 
-ggsave(filename = "_figures/_climate/RH.pdf", width = 8, height = 8)
+ggsave(filename = "_extra/_extrafigures/RH.pdf", width = 8, height = 8)
 
 vars_nm <- c("Te", "Td", "RH")
 
@@ -117,7 +117,7 @@ for(var_nm in vars_nm) {
       labs(x = "Day", y = "Value", title = sprintf("Country: %s, climatic variable: %s", ct_nm, var_nm))
     print(pl)
     
-    ggsave(filename = sprintf("_figures/_climate/%s-%s.pdf", ct_nm, var_nm), plot = pl, width = 12, height = 8)
+    ggsave(filename = sprintf("_extra/_extrafigures/%s-%s.pdf", ct_nm, var_nm), plot = pl, width = 12, height = 8)
   }
 }
 
